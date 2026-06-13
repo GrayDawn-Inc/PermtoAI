@@ -1,0 +1,47 @@
+{
+  "blocklist": [
+    "love", "rice", "pizza", "burger", "coffee", "tea", "breakfast", "lunch", "dinner",
+    "movie", "music", "game", "gaming", "football", "soccer", "basketball", "cricket",
+    "instagram", "facebook", "tiktok", "twitter", "netflix", "shopping", "fashion",
+    "romance", "dating", "party", "birthday", "wedding", "holiday", "vacation",
+    "bitcoin", "crypto", "lottery", "gambling", "casino"
+  ],
+  "commonPermitWords": [
+    "work", "job", "task", "area", "unit", "line", "pipe", "rack", "deck", "field",
+    "site", "plant", "platform", "facility", "section", "level", "floor", "zone",
+    "repair", "replace", "install", "remove", "inspect", "test", "check", "verify",
+    "maintain", "maintenance", "operate", "operation", "perform", "execute", "complete",
+    "near", "adjacent", "above", "below", "inside", "outside", "during", "after", "before",
+    "with", "without", "using", "via", "from", "into", "onto", "under", "over",
+    "meter", "metre", "inch", "foot", "feet", "diameter", "length", "height", "depth",
+    "north", "south", "east", "west", "phase", "stage", "step", "shift", "day", "night",
+    "new", "old", "existing", "temporary", "permanent", "minor", "major", "routine",
+    "permit", "ptw", "jsa", "hira", "risk", "safe", "safety", "hse", "control", "measure"
+  ],
+  "hseTerms": [
+    "weld", "welding", "welders", "grinding", "cutting", "spark", "sparks", "hotwork",
+    "confined", "space", "entry", "vessel", "tank", "manhole", "manhole", "asphyxiation",
+    "asphyxia", "oxygen", "ventilation", "purge", "purge", "gas", "gases", "lel", "h2s",
+    "hydrogen", "sulfide", "sulphide", "toxic", "flammable", "hydrocarbon", "hydrocarbons",
+    "fire", "explosion", "ignite", "ignition", "burn", "burns", "flash", "smoke",
+    "height", "fall", "falls", "scaffold", "scaffolding", "harness", "lanyard", "guardrail",
+    "dropped", "object", "objects", "overhead", "lift", "lifting", "crane", "rigging",
+    "hoist", "hoisting", "load", "banksman", "signalman", "exclusion",
+    "electrical", "electric", "loto", "lockout", "tagout", "isolation", "isolate", "isolator",
+    "arc", "flash", "shock", "voltage", "energised", "energized", "deenergised", "deenergized",
+    "pressure", "test", "testing", "hydro", "pneumatic", "rupture", "bleed", "depressurise",
+    "depressurize", "bop", "well", "wellhead", "kick", "blowout", "wireline", "coiled", "tubing",
+    "drilling", "rig", "simops", "simultaneous", "conflict", "barrier", "barricade",
+    "radiography", "radiation", "ndt", "dosimeter", "excavation", "trench", "trenching", "shoring",
+    "collapse", "engulfment", "entrapment", "crush", "pinch", "struck", "collision",
+    "pipeline", "pigging", "pig", "sampling", "sample", "chemical", "spill", "bunding",
+    "scba", "respirator", "ppe", "helmet", "gloves", "coveralls", "extinguisher",
+    "offshore", "onshore", "platform", "helideck", "helicopter", "vessel", "marine", "mooring",
+    "diving", "diver", "hyperbaric", "noise", "vibration", "ergonomic", "manual", "handling",
+    "fatigue", "weather", "storm", "heat", "stress", "hydration", "journey", "travel",
+    "waste", "disposal", "environmental", "emission", "flare", "flaring", "produced", "water",
+    "dpr", "nuprc", "iogp", "iso", "egaspin", "alarp", "mah", "sce", "esd", "psv", "relief",
+    "nitrogen", "inert", "atmosphere", "monitor", "monitoring", "detector", "detection",
+    "contractor", "supervisor", "attendant", "rescue", "tripod", "evacuation", "emergency"
+  ]
+}

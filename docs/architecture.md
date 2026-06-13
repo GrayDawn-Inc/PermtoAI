@@ -41,7 +41,9 @@ PermitoAI has two independent server processes that can run concurrently:
 
 Both servers share the same service layer — no logic is duplicated.
 
-> **New in current version:** `SimopsService` (schedule conflict detection + incompatibility matrix), compliance document ingestion pipeline (`src/ingest.ts`), and `RiskScoringService.computeSummary()` (aggregate matrix summary with confidence scoring).
+> **Hazard suggestion & keyword validation:** See [hazard-suggestion-and-validation.md](./hazard-suggestion-and-validation.md) for the full pipeline, warn-mode behaviour, and RAG improvements.
+
+> **New in current version:** `SimopsService` (schedule conflict detection + incompatibility matrix), compliance document ingestion pipeline (`src/ingest.ts`), `RiskScoringService.computeSummary()` (aggregate matrix summary with confidence scoring), and **ContextValidationService** (incorrect keyword detection in warn mode).
 
 ---
 

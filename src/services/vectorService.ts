@@ -22,13 +22,15 @@ export class VectorService {
    */
   async searchRegulations(
     queryVector: number[],
-    limit: number = 5
+    limit: number = 5,
+    scoreThreshold?: number
   ): Promise<VectorSearchResult[]> {
     try {
       const results = await this.client.search(env.QDRANT_COLLECTION, {
         vector: queryVector,
         limit,
         with_payload: true,
+        ...(scoreThreshold !== undefined ? { score_threshold: scoreThreshold } : {}),
       });
 
       return results.map((r) => ({
@@ -48,7 +50,8 @@ export class VectorService {
    */
   async searchIncidents(
     queryVector: number[],
-    limit: number = 5
+    limit: number = 5,
+    scoreThreshold?: number
   ): Promise<VectorSearchResult[]> {
     try {
       const results = await this.client.search(
@@ -57,6 +60,7 @@ export class VectorService {
           vector: queryVector,
           limit,
           with_payload: true,
+          ...(scoreThreshold !== undefined ? { score_threshold: scoreThreshold } : {}),
         }
       );
 
@@ -75,10 +79,41 @@ export class VectorService {
    * Search compliance documents (ingested PDFs) for relevant clauses/sections.
    * Used to ground compliance checks in actual document content.
    */
+  /**
+   * Look up a seeded work-type profile by exact payload match (case-insensitive).
+   */
+  async findWorkTypeProfile(workType: string): Promise<VectorSearchResult | null> {
+    try {
+      const results = await this.client.scroll(env.QDRANT_COLLECTION, {
+        limit: 100,
+        with_payload: true,
+        with_vector: false,
+      });
+
+      const normalised = workType.trim().toLowerCase();
+      const match = results.points.find((p) => {
+        const wt = (p.payload?.["workType"] as string | undefined)?.toLowerCase();
+        return wt === normalised;
+      });
+
+      if (!match) return null;
+
+      return {
+        id: match.id,
+        score: 1,
+        payload: (match.payload ?? {}) as Record<string, unknown>,
+      };
+    } catch (error) {
+      console.error("[VectorService] Work type profile lookup failed:", error);
+      return null;
+    }
+  }
+
   async searchComplianceDocs(
     queryVector: number[],
     limit: number = 5,
-    sourceFile?: string
+    sourceFile?: string,
+    scoreThreshold?: number
   ): Promise<VectorSearchResult[]> {
     try {
       const filter = sourceFile
@@ -90,6 +125,7 @@ export class VectorService {
         limit,
         with_payload: true,
         filter,
+        ...(scoreThreshold !== undefined ? { score_threshold: scoreThreshold } : {}),
       });
 
       return results.map((r) => ({

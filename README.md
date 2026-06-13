@@ -267,7 +267,12 @@ Returns `recommendation` (`HOLD` / `PROCEED WITH CONTROLS` / `SAFE TO PROCEED`),
 
 ## API Endpoints
 
-The REST API runs on port `4000` by default. See [docs/api.md](docs/api.md) for the full reference.
+The REST API runs on port `4000` by default.
+
+- **[API Reference](docs/api-reference.md)** — endpoints, headers, bodies, examples
+- **[Hazard Suggestion & Validation](docs/hazard-suggestion-and-validation.md)** — keyword validation and RAG pipeline
+- **[Architecture](docs/architecture.md)** — system design
+- **[MCP Integration](docs/mcp.md)** — Claude Desktop / MCP clients
 
 ```
 GET  /api/v1/health

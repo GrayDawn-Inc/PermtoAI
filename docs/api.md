@@ -1,5 +1,7 @@
 # REST API Reference
 
+> **Updated reference:** See [api-reference.md](./api-reference.md) for the complete endpoint documentation including headers, request bodies, and examples (including hazard keyword validation).
+
 PermitoAI REST API — port `4000` by default (configurable via `API_PORT` env var).
 
 All requests and responses use `Content-Type: application/json`. All responses include a top-level `success` boolean.

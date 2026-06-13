@@ -51,6 +51,15 @@ export const JobContextSchema = z.object({
 });
 export type JobContext = z.infer<typeof JobContextSchema>;
 
+// ─── Context validation (incorrect keywords) ───
+export const IncorrectKeywordSchema = z.object({
+  keyword: z.string(),
+  field: z.string(),
+  flag: z.literal("incorrect_keyword"),
+  reason: z.string(),
+});
+export type IncorrectKeyword = z.infer<typeof IncorrectKeywordSchema>;
+
 // ─── Permit ───
 export const PermitSchema = z.object({
   id: z.string(),

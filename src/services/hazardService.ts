@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { HazardSchema, type Hazard, type JobContext } from "../schemas/index.js";
+import {
+  validateJobContext,
+  extractRelevanceTerms,
+  type IncorrectKeyword,
+} from "./contextValidationService.js";
 import { chatCompletion, embedText } from "./embeddingService.js";
 import { VectorService, type VectorSearchResult } from "./vectorService.js";
 import { env } from "../config.js";
@@ -13,12 +18,15 @@ Your role is to identify workplace hazards and suggest appropriate controls base
 - Industry best practices
 - Nigerian regulatory requirements
 
-Always prioritize worker safety and compliance. Provide specific, actionable recommendations.`;
+Always prioritize worker safety and compliance. Provide specific, actionable recommendations.
+Ignore any non-work-related or irrelevant text in the job description.`;
 
 function buildHazardPrompt(
   context: JobContext,
   regulations: string,
-  incidentSummary: string
+  incidentSummary: string,
+  complianceDocs: string,
+  keywordWarning?: string
 ): string {
   return `Analyze this permit-to-work scenario and identify hazards:
 
@@ -29,12 +37,16 @@ JOB CONTEXT:
 - Equipment: ${(context.equipment ?? []).join(", ") || "Not specified"}
 - Contractor: ${context.contractor?.name ?? "N/A"} (Tier ${context.contractor?.tier ?? "N/A"})
 ${context.description ? `- Description: ${context.description}` : ""}
+${keywordWarning ?? ""}
 
-RELEVANT REGULATIONS:
+RELEVANT REGULATIONS & WORK-TYPE PROFILES:
 ${regulations || "No specific regulations retrieved."}
 
 SIMILAR HISTORICAL INCIDENTS:
 ${incidentSummary || "No similar incidents found."}
+
+RELEVANT COMPLIANCE DOCUMENT EXCERPTS:
+${complianceDocs || "No compliance document excerpts retrieved."}
 
 TASK:
 Generate 5-${env.MAX_HAZARD_SUGGESTIONS} potential hazards for this job. For each hazard, provide:
@@ -49,6 +61,11 @@ Generate 5-${env.MAX_HAZARD_SUGGESTIONS} potential hazards for this job. For eac
    - IOGP (e.g. "IOGP Report 459 Section 3.2")
    OMIT this field entirely if no specific regulation applies — do NOT use ["N/A"], ["none"], or any placeholder strings.
 7. explanation: Brief rationale for why this hazard is relevant
+
+CONSTRAINTS:
+- Only suggest hazards directly relevant to the stated job type and work activity
+- Do NOT invent hazards related to irrelevant or non-industrial topics
+- Prefer controls from RELEVANT REGULATIONS when available
 
 CRITICAL FOCUS AREAS:
 - H₂S exposure in sour gas fields
@@ -75,14 +92,45 @@ function formatIncidents(results: VectorSearchResult[]): string {
   return results
     .map(
       (r, i) =>
-        `[${i + 1}] ${(r.payload["description"] as string) ?? "Incident"} — Hazards: ${(r.payload["hazards"] as string) ?? "N/A"} (similarity: ${r.score.toFixed(2)})`
+        `[${i + 1}] ${(r.payload["description"] as string) ?? "Incident"} — Hazards: ${((r.payload["hazard_names"] as string[] | undefined)?.join(", ") ?? (r.payload["hazards"] as string) ?? "N/A")} (similarity: ${r.score.toFixed(2)})`
     )
     .join("\n");
 }
 
+function formatComplianceDocs(results: VectorSearchResult[]): string {
+  if (results.length === 0) return "";
+  return results
+    .map(
+      (r, i) =>
+        `[${i + 1}] ${(r.payload["sourceFile"] as string) ?? "Document"} — ${(((r.payload["content"] as string) ?? (r.payload["text"] as string)) ?? "").slice(0, 400)} (relevance: ${r.score.toFixed(2)})`
+    )
+    .join("\n");
+}
+
+function mergeRegulationResults(
+  exact: VectorSearchResult | null,
+  semantic: VectorSearchResult[]
+): VectorSearchResult[] {
+  const merged: VectorSearchResult[] = [];
+  const seen = new Set<string | number>();
+
+  if (exact) {
+    merged.push(exact);
+    seen.add(exact.id);
+  }
+
+  for (const r of semantic) {
+    if (seen.has(r.id)) continue;
+    merged.push(r);
+    seen.add(r.id);
+    if (merged.length >= 5) break;
+  }
+
+  return merged;
+}
+
 const DPR_PLACEHOLDER = /^(n\/?a|none|null|not applicable|no reference|no ref)$/i;
 
-/** Strip placeholder values from regulatoryRefs; remove the field entirely if nothing real remains. */
 function normalizeHazards(hazards: Hazard[]): Hazard[] {
   return hazards.map((h) => {
     if (!h.regulatoryRefs?.length) return h;
@@ -97,10 +145,14 @@ function normalizeHazards(hazards: Hazard[]): Hazard[] {
 
 export interface HazardSuggestionResult {
   hazards: Hazard[];
+  contextValid: boolean;
+  incorrectKeywords: IncorrectKeyword[];
+  warnings?: string[];
   promptTokens: number;
   completionTokens: number;
   regulationsUsed: number;
   incidentsUsed: number;
+  complianceDocsUsed: number;
 }
 
 export class HazardService {
@@ -111,27 +163,66 @@ export class HazardService {
   }
 
   async suggestHazards(context: JobContext): Promise<HazardSuggestionResult> {
-    // Build embedding from job context
-    const contextText = `${context.jobType} ${context.location ?? ""} ${context.environment ?? ""} ${(context.equipment ?? []).join(" ")} ${context.description ?? ""}`;
-    let queryVector: number[];
+    const validation = validateJobContext(context);
+    const { sanitizedContext, incorrectKeywords, contextValid } = validation;
 
+    const warnings: string[] = [];
+    if (!contextValid) {
+      const flagged = incorrectKeywords.map((k) => `"${k.keyword}" (${k.field})`).join(", ");
+      warnings.push(
+        `Incorrect keyword(s) detected: ${flagged}. These terms were excluded from AI analysis. Please remove non-work-related text from the permit.`
+      );
+      console.warn(`[HazardService] Incorrect keywords flagged (warn mode): ${flagged}`);
+    }
+
+    const keywordWarning = !contextValid
+      ? `\nNOTE: Non-work-related terms were removed before analysis: ${incorrectKeywords.map((k) => k.keyword).join(", ")}. Do not generate hazards related to those terms.`
+      : undefined;
+
+    const contextText = [
+      sanitizedContext.jobType,
+      sanitizedContext.location ?? "",
+      sanitizedContext.environment ?? "",
+      ...(sanitizedContext.equipment ?? []),
+      sanitizedContext.description ?? "",
+    ]
+      .join(" ")
+      .trim();
+
+    let queryVector: number[];
     try {
       queryVector = await embedText(contextText);
     } catch (error) {
       console.warn("[HazardService] Embedding failed, proceeding without vector search:", error);
-      return this.suggestWithoutVectors(context);
+      return this.suggestWithoutVectors(sanitizedContext, {
+        contextValid,
+        incorrectKeywords,
+        warnings,
+        keywordWarning,
+      });
     }
 
-    // Retrieve regulations and incidents in parallel
-    const [regulations, incidents] = await Promise.all([
-      this.vectorService.searchRegulations(queryVector),
-      this.vectorService.searchIncidents(queryVector),
+    const threshold = env.HAZARD_CONFIDENCE_THRESHOLD;
+
+    const [semanticRegulations, incidents, complianceDocs, exactProfile] = await Promise.all([
+      this.vectorService.searchRegulations(queryVector, 5, threshold),
+      this.vectorService.searchIncidents(queryVector, 5, threshold),
+      this.vectorService.searchComplianceDocs(queryVector, 3, undefined, threshold),
+      this.vectorService.findWorkTypeProfile(sanitizedContext.jobType),
     ]);
 
+    const regulations = mergeRegulationResults(exactProfile, semanticRegulations);
     const regulationText = formatRegulations(regulations);
     const incidentText = formatIncidents(incidents);
+    const complianceText = formatComplianceDocs(complianceDocs);
 
-    const prompt = buildHazardPrompt(context, regulationText, incidentText);
+    const prompt = buildHazardPrompt(
+      sanitizedContext,
+      regulationText,
+      incidentText,
+      complianceText,
+      keywordWarning
+    );
 
     const result = await chatCompletion([
       { role: "system", content: SYSTEM_INSTRUCTION },
@@ -140,27 +231,40 @@ export class HazardService {
 
     const parsed = JSON.parse(result.content);
     const hazardsArray = z.array(HazardSchema);
-    const hazards = normalizeHazards(hazardsArray.parse(parsed.hazards));
+    let hazards = normalizeHazards(hazardsArray.parse(parsed.hazards));
+    const aiHazardsBeforeFilter = [...hazards];
 
-    // Merge any missed hazards from incident similarity search
-    const mergedHazards = this.mergeIncidentHazards(hazards, incidents);
+    hazards = this.mergeIncidentHazards(hazards, incidents);
+    hazards = this.filterIrrelevantHazards(hazards, sanitizedContext, regulations);
+
+    if (hazards.length === 0 && aiHazardsBeforeFilter.length > 0) {
+      console.warn("[HazardService] Post-filter removed all hazards — keeping AI output");
+      hazards = aiHazardsBeforeFilter;
+    }
 
     return {
-      hazards: mergedHazards,
+      hazards,
+      contextValid,
+      incorrectKeywords,
+      warnings: warnings.length > 0 ? warnings : undefined,
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
       regulationsUsed: regulations.length,
       incidentsUsed: incidents.length,
+      complianceDocsUsed: complianceDocs.length,
     };
   }
 
-  /**
-   * Fallback: suggest hazards without vector search (rule-based degradation).
-   */
   private async suggestWithoutVectors(
-    context: JobContext
+    context: JobContext,
+    meta: {
+      contextValid: boolean;
+      incorrectKeywords: IncorrectKeyword[];
+      warnings: string[];
+      keywordWarning?: string;
+    }
   ): Promise<HazardSuggestionResult> {
-    const prompt = buildHazardPrompt(context, "", "");
+    const prompt = buildHazardPrompt(context, "", "", "", meta.keywordWarning);
 
     const result = await chatCompletion([
       { role: "system", content: SYSTEM_INSTRUCTION },
@@ -169,31 +273,25 @@ export class HazardService {
 
     const parsed = JSON.parse(result.content);
     const hazardsArray = z.array(HazardSchema);
-    const hazards = normalizeHazards(hazardsArray.parse(parsed.hazards));
+    let hazards = normalizeHazards(hazardsArray.parse(parsed.hazards));
+    hazards = this.filterIrrelevantHazards(hazards, context, []);
 
     return {
       hazards,
+      contextValid: meta.contextValid,
+      incorrectKeywords: meta.incorrectKeywords,
+      warnings: meta.warnings.length > 0 ? meta.warnings : undefined,
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
       regulationsUsed: 0,
       incidentsUsed: 0,
+      complianceDocsUsed: 0,
     };
   }
 
-  /**
-   * Missed hazard guardrail: merge hazards discovered from similar incidents
-   * that the AI may have missed.
-   *
-   * Only adds hazards that are:
-   * - From incidents above the similarity threshold
-   * - Not semantically duplicated by an existing AI-generated hazard
-   * - Not a generic outcome term (e.g. "Serious Injury")
-   * Up to MAX_MERGED_FROM_INCIDENTS additional hazards are added.
-   */
   private readonly INCIDENT_SIMILARITY_THRESHOLD = 0.70;
   private readonly MAX_MERGED_FROM_INCIDENTS = 5;
 
-  // Terms that describe outcomes or consequences rather than hazards
   private readonly OUTCOME_TERMS = new Set([
     "serious injury",
     "injury",
@@ -202,12 +300,15 @@ export class HazardService {
     "incident",
   ]);
 
-  // Keywords that indicate a chemical/atmospheric hazard
   private readonly CHEMICAL_KEYWORDS = [
     "gas", "vapor", "vapour", "chemical", "h2s", "co", "oxygen",
     "toxic", "flammable", "explosive", "lel", "fume", "asphyxia",
     "asphyxiation", "atmosphere", "atmospheric",
   ];
+
+  private readonly BLOCKLIST_HAZARD_TERMS = new Set([
+    "love", "rice", "pizza", "movie", "game", "football", "shopping", "romance",
+  ]);
 
   private inferCategory(hazardName: string): Hazard["category"] {
     const lower = hazardName.toLowerCase();
@@ -217,10 +318,6 @@ export class HazardService {
     return "physical";
   }
 
-  /**
-   * Returns true if the candidate hazard is semantically covered by an
-   * existing hazard name, using significant-word overlap.
-   */
   private isDuplicate(candidate: string, existingNames: Set<string>): boolean {
     const lower = candidate.toLowerCase();
     if (existingNames.has(lower)) return true;
@@ -239,7 +336,6 @@ export class HazardService {
 
       if (candidateWords.length === 0) continue;
       const overlap = candidateWords.filter((w) => existingWords.includes(w)).length;
-      // If more than half the candidate's key words appear in an existing hazard, treat as duplicate
       if (overlap / candidateWords.length > 0.5) return true;
     }
 
@@ -248,6 +344,58 @@ export class HazardService {
 
   private isOutcomeTerm(hazardName: string): boolean {
     return this.OUTCOME_TERMS.has(hazardName.toLowerCase());
+  }
+
+  /**
+   * Drop hazards that contain blocklisted terms or have no overlap with job context / regulations.
+   */
+  private filterIrrelevantHazards(
+    hazards: Hazard[],
+    context: JobContext,
+    regulations: VectorSearchResult[]
+  ): Hazard[] {
+    const relevanceTerms = extractRelevanceTerms(context);
+
+    for (const reg of regulations) {
+      const regHazards = reg.payload["hazards"] as string[] | undefined;
+      if (regHazards) {
+        for (const h of regHazards) {
+          for (const token of h.toLowerCase().split(/[\s/(),]+/)) {
+            if (token.length >= 3) relevanceTerms.add(token);
+          }
+        }
+      }
+    }
+
+    const STOP = new Set(["from", "with", "during", "risk", "hazard", "potential"]);
+
+    return hazards.filter((hazard) => {
+      const nameLower = hazard.name.toLowerCase();
+      const nameTokens = nameLower.split(/[\s/(),]+/).filter((t) => t.length >= 3);
+
+      if (nameTokens.some((t) => this.BLOCKLIST_HAZARD_TERMS.has(t))) {
+        console.warn(`[HazardService] Filtered irrelevant hazard: "${hazard.name}"`);
+        return false;
+      }
+
+      const significant = nameTokens.filter((t) => !STOP.has(t));
+      if (significant.length === 0) return true;
+
+      const hasOverlap = significant.some((t) => relevanceTerms.has(t) || nameLower.includes(t));
+      if (!hasOverlap) {
+        // Allow if hazard shares a stem with job type words (e.g. "weld" / "welding")
+        const jobWords = context.jobType.toLowerCase().split(/[\s/()-]+/);
+        const jobMatch = significant.some((t) =>
+          jobWords.some((jw) => jw.includes(t) || t.includes(jw))
+        );
+        if (!jobMatch) {
+          console.warn(`[HazardService] Filtered low-relevance hazard: "${hazard.name}"`);
+          return false;
+        }
+      }
+
+      return true;
+    });
   }
 
   private mergeIncidentHazards(

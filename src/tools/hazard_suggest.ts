@@ -18,11 +18,15 @@ export const HazardSuggestTool = {
 
       return JSON.stringify({
         success: true,
+        contextValid: result.contextValid,
+        incorrectKeywords: result.incorrectKeywords,
+        warnings: result.warnings,
         hazardCount: result.hazards.length,
         hazards: result.hazards,
         metadata: {
           regulationsUsed: result.regulationsUsed,
           incidentsUsed: result.incidentsUsed,
+          complianceDocsUsed: result.complianceDocsUsed,
           promptTokens: result.promptTokens,
           completionTokens: result.completionTokens,
         },

@@ -167,17 +167,24 @@ ${hazardSummary}`,
   return c.json({
     success: true,
     jobContext,
+    contextValid: hazardResult.contextValid,
+    incorrectKeywords: hazardResult.incorrectKeywords,
+    warnings: hazardResult.warnings,
     recommendation:
       allValidationPassed && overallCompliant
         ? "Recommend Approval"
         : "Flag for Review",
     steps: {
       hazardSuggest: {
+        contextValid: hazardResult.contextValid,
+        incorrectKeywords: hazardResult.incorrectKeywords,
+        warnings: hazardResult.warnings,
         hazardCount: hazards.length,
         hazards,
         metadata: {
           regulationsUsed: hazardResult.regulationsUsed,
           incidentsUsed: hazardResult.incidentsUsed,
+          complianceDocsUsed: hazardResult.complianceDocsUsed,
           promptTokens: hazardResult.promptTokens,
           completionTokens: hazardResult.completionTokens,
         },
@@ -256,6 +263,9 @@ agentRouter.post("/quick-assess", async (c) => {
   return c.json({
     success: true,
     jobContext,
+    contextValid: hazardResult.contextValid,
+    incorrectKeywords: hazardResult.incorrectKeywords,
+    warnings: hazardResult.warnings,
     recommendation: requiresFullAssessment
       ? "Requires Full Assessment"
       : "Proceed with Caution",
@@ -285,6 +295,7 @@ agentRouter.post("/quick-assess", async (c) => {
     metadata: {
       regulationsUsed: hazardResult.regulationsUsed,
       incidentsUsed: hazardResult.incidentsUsed,
+      complianceDocsUsed: hazardResult.complianceDocsUsed,
     },
   });
 });
@@ -364,6 +375,14 @@ agentRouter.post("/simops-assess", async (c) => {
   ];
 
   const hazardResults = await Promise.all(hazardJobs);
+
+  const primaryHazardResult = hazardResults[0];
+  const allIncorrectKeywords = hazardResults.flatMap((r) => r.incorrectKeywords);
+  const dedupedKeywords = allIncorrectKeywords.filter(
+    (item, index, arr) =>
+      arr.findIndex((x) => x.keyword === item.keyword && x.field === item.field) === index
+  );
+  const allWarnings = hazardResults.flatMap((r) => r.warnings ?? []);
 
   // Merge hazards — deduplicate by name (case-insensitive)
   const seenNames = new Set<string>();
@@ -483,6 +502,9 @@ Generate a SIMOPS safety briefing for the permit approver.`,
   return c.json({
     success: true,
     request,
+    contextValid: primaryHazardResult?.contextValid ?? true,
+    incorrectKeywords: dedupedKeywords,
+    warnings: allWarnings.length > 0 ? [...new Set(allWarnings)] : undefined,
     recommendation: briefing.recommendation,
     overallRisk: simopsResult.overallRisk,
     steps: {
