@@ -3,7 +3,11 @@
  * Run: npx tsx src/tests/contextValidation.test.ts
  */
 import { validateJobContext, extractRelevanceTerms } from "../services/contextValidationService.js";
-import { normalizeJobContextInput } from "../api/contextRequest.js";
+import {
+  incompleteJobDescriptionResponse,
+  isIncompleteJobDescription,
+  normalizeJobContextInput,
+} from "../api/contextRequest.js";
 
 let passed = 0;
 let failed = 0;
@@ -143,6 +147,33 @@ console.log("\n── ContextValidationService tests ──\n");
   assert(
     r.incorrectKeywords.some((k) => k.keyword === "love" && k.field === "description"),
     "flags love from normalized aliases"
+  );
+}
+
+// 9. Incomplete one-letter descriptions are rejected separately from keyword flags
+{
+  const singleLetter = normalizeJobContextInput({
+    workType: "Hot Work",
+    description: ["r"],
+    jobDescription: "r",
+    job_description: "r",
+  });
+  const stepOnly = normalizeJobContextInput({
+    workType: "Hot Work",
+    description: "Step 1: r",
+  });
+
+  assert(
+    isIncompleteJobDescription(singleLetter.description),
+    "single-letter description is incomplete"
+  );
+  assert(
+    isIncompleteJobDescription(stepOnly.description),
+    "step boilerplate with one-letter content is incomplete"
+  );
+  assert(
+    incompleteJobDescriptionResponse(singleLetter).warnings[0]?.includes("too short"),
+    "incomplete description response tells the user it is too short"
   );
 }
 

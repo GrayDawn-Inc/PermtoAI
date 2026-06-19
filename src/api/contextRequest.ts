@@ -35,6 +35,19 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
+function meaningfulDescriptionTerms(description?: string): string[] {
+  if (!description) return [];
+  const boilerplate = new Set(["step"]);
+  return description
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter((term) => term.length >= 3 && !/^\d+$/.test(term) && !boilerplate.has(term));
+}
+
+export function isIncompleteJobDescription(description?: string): boolean {
+  return !!description?.trim() && meaningfulDescriptionTerms(description).length === 0;
+}
+
 export function normalizeJobContextInput(body: unknown): JobContext {
   const input = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const descriptionParts = unique(
@@ -79,11 +92,30 @@ export function invalidJobContextResponse(
   };
 }
 
+export function incompleteJobDescriptionResponse(jobContext: JobContext) {
+  return {
+    success: false,
+    contextValid: false,
+    error: "Invalid job description",
+    message:
+      "Please enter a complete job description. The description should describe the actual work activity, hazards, equipment, location, or controls.",
+    jobContext,
+    incorrectKeywords: [],
+    warnings: [
+      "The job description is too short or incomplete for hazard assessment.",
+    ],
+  };
+}
+
 export function rejectInvalidJobContext(
   c: Context,
   jobContext: JobContext,
   validation: ContextValidationResult
 ) {
+  if (isIncompleteJobDescription(jobContext.description)) {
+    return c.json(incompleteJobDescriptionResponse(jobContext), 422);
+  }
+
   if (validation.contextValid) return null;
   return c.json(invalidJobContextResponse(validation, jobContext), 422);
 }
