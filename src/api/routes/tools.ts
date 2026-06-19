@@ -6,13 +6,21 @@ import { RiskScoringService } from "../../services/riskScoringService.js";
 import { ValidationService } from "../../services/validationService.js";
 import { chatCompletion } from "../../services/embeddingService.js";
 import { checkSimops } from "../../services/simopsService.js";
+import {
+  normalizeJobContextInput,
+  rejectInvalidJobContext,
+  validateJobContextForResponse,
+} from "../contextRequest.js";
 
 const toolsRouter = new Hono();
 
 // POST /api/v1/tools/hazard-suggest
 toolsRouter.post("/hazard-suggest", async (c) => {
   const body = await c.req.json();
-  const jobContext = JobContextSchema.parse(body);
+  const jobContext = normalizeJobContextInput(body);
+  const contextValidation = validateJobContextForResponse(jobContext);
+  const invalidResponse = rejectInvalidJobContext(c, jobContext, contextValidation);
+  if (invalidResponse) return invalidResponse;
 
   console.log(`[API] HAZARD_SUGGEST called for job type: ${jobContext.jobType}`);
   const service = new HazardService();

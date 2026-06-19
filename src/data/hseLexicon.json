@@ -9,9 +9,9 @@
   "commonPermitWords": [
     "work", "job", "task", "area", "unit", "line", "pipe", "rack", "deck", "field",
     "site", "plant", "platform", "facility", "section", "level", "floor", "zone",
-    "repair", "replace", "install", "remove", "inspect", "test", "check", "verify",
+    "repair", "replace", "install", "remove", "inspect", "inspection", "test", "check", "verify",
     "maintain", "maintenance", "operate", "operation", "perform", "execute", "complete",
-    "near", "adjacent", "above", "below", "inside", "outside", "during", "after", "before",
+    "near", "adjacent", "above", "below", "inside", "outside", "internal", "during", "after", "before",
     "with", "without", "using", "via", "from", "into", "onto", "under", "over",
     "meter", "metre", "inch", "foot", "feet", "diameter", "length", "height", "depth",
     "north", "south", "east", "west", "phase", "stage", "step", "shift", "day", "night",
@@ -19,7 +19,7 @@
     "permit", "ptw", "jsa", "hira", "risk", "safe", "safety", "hse", "control", "measure"
   ],
   "hseTerms": [
-    "weld", "welding", "welders", "grinding", "cutting", "spark", "sparks", "hotwork",
+    "weld", "welding", "welders", "grinding", "cutting", "spark", "sparks", "hotwork", "flange", "flanges",
     "confined", "space", "entry", "vessel", "tank", "manhole", "manhole", "asphyxiation",
     "asphyxia", "oxygen", "ventilation", "purge", "purge", "gas", "gases", "lel", "h2s",
     "hydrogen", "sulfide", "sulphide", "toxic", "flammable", "hydrocarbon", "hydrocarbons",

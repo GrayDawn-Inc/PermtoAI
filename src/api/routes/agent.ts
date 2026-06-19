@@ -6,6 +6,11 @@ import { RiskScoringService } from "../../services/riskScoringService.js";
 import { ValidationService } from "../../services/validationService.js";
 import { chatCompletion } from "../../services/embeddingService.js";
 import { checkSimops } from "../../services/simopsService.js";
+import {
+  normalizeJobContextInput,
+  rejectInvalidJobContext,
+  validateJobContextForResponse,
+} from "../contextRequest.js";
 
 const agentRouter = new Hono();
 
@@ -106,7 +111,10 @@ agentRouter.get("/tools", (c) => {
 // Workflow: hazard-suggest → risk-assess → compliance-check + permit-validate (parallel)
 agentRouter.post("/full-assessment", async (c) => {
   const body = await c.req.json();
-  const jobContext = JobContextSchema.parse(body);
+  const jobContext = normalizeJobContextInput(body);
+  const contextValidation = validateJobContextForResponse(jobContext);
+  const invalidResponse = rejectInvalidJobContext(c, jobContext, contextValidation);
+  if (invalidResponse) return invalidResponse;
 
   console.log(`[API] Agent full-assessment started for job type: ${jobContext.jobType}`);
 
@@ -242,7 +250,10 @@ ${hazardSummary}`,
 // Workflow: hazard-suggest → risk-assess
 agentRouter.post("/quick-assess", async (c) => {
   const body = await c.req.json();
-  const jobContext = JobContextSchema.parse(body);
+  const jobContext = normalizeJobContextInput(body);
+  const contextValidation = validateJobContextForResponse(jobContext);
+  const invalidResponse = rejectInvalidJobContext(c, jobContext, contextValidation);
+  if (invalidResponse) return invalidResponse;
 
   console.log(`[API] Agent quick-assess started for job type: ${jobContext.jobType}`);
 

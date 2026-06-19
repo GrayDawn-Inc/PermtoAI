@@ -3,6 +3,7 @@
  * Run: npx tsx src/tests/contextValidation.test.ts
  */
 import { validateJobContext, extractRelevanceTerms } from "../services/contextValidationService.js";
+import { normalizeJobContextInput } from "../api/contextRequest.js";
 
 let passed = 0;
 let failed = 0;
@@ -117,6 +118,32 @@ console.log("\n── ContextValidationService tests ──\n");
   });
 
   assert(r.contextValid === true, "contractor name not scanned for keywords");
+}
+
+// 8. Frontend description aliases are normalized before validation
+{
+  const jobContext = normalizeJobContextInput({
+    workType: "Hot Work",
+    description: ["love"],
+    jobDescription: "love",
+    job_description: "love",
+    steps: ["love"],
+    jobSteps: ["love"],
+    job_steps: ["love"],
+    workDescription: "love",
+    work_description: "love",
+    taskDescription: "love",
+    task_description: "love",
+  });
+  const r = validateJobContext(jobContext);
+
+  assert(jobContext.jobType === "Hot Work", "normalizes workType to jobType");
+  assert(jobContext.description === "love", "deduplicates description aliases");
+  assert(r.contextValid === false, "invalid when alias description contains love");
+  assert(
+    r.incorrectKeywords.some((k) => k.keyword === "love" && k.field === "description"),
+    "flags love from normalized aliases"
+  );
 }
 
 console.log(`\n── Results: ${passed} passed, ${failed} failed ──\n`);

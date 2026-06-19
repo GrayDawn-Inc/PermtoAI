@@ -242,7 +242,7 @@ async function testComplianceCheck() {
     },
     {
       role: "user",
-      content: `Evaluate this permit for regulatory compliance:\n\nJOB: ${sampleContext.jobType}\nLOCATION: ${sampleContext.location}\nENVIRONMENT: ${sampleContext.environment}\nEQUIPMENT: ${sampleContext.equipment.join(", ")}\nCONTRACTOR: ${sampleContext.contractor?.name} (Tier ${sampleContext.contractor?.tier})\n\nHAZARD ASSESSMENT:\n${hazardSummary}`,
+      content: `Evaluate this permit for regulatory compliance:\n\nJOB: ${sampleContext.jobType}\nLOCATION: ${sampleContext.location}\nENVIRONMENT: ${sampleContext.environment}\nEQUIPMENT: ${(sampleContext.equipment ?? []).join(", ")}\nCONTRACTOR: ${sampleContext.contractor?.name} (Tier ${sampleContext.contractor?.tier})\n\nHAZARD ASSESSMENT:\n${hazardSummary}`,
     },
   ]);
 
