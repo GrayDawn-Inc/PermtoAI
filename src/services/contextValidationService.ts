@@ -20,6 +20,17 @@ export interface ContextValidationResult {
   sanitizedContext: JobContext;
 }
 
+export class InvalidJobContextError extends Error {
+  constructor(
+    message: string,
+    public readonly validation: ContextValidationResult,
+    public readonly jobContext: JobContext
+  ) {
+    super(message);
+    this.name = "InvalidJobContextError";
+  }
+}
+
 interface LexiconData {
   blocklist: string[];
   commonPermitWords: string[];

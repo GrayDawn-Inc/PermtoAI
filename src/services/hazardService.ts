@@ -3,6 +3,7 @@ import { HazardSchema, type Hazard, type JobContext } from "../schemas/index.js"
 import {
   validateJobContext,
   extractRelevanceTerms,
+  InvalidJobContextError,
   type IncorrectKeyword,
 } from "./contextValidationService.js";
 import { chatCompletion, embedText } from "./embeddingService.js";
@@ -173,6 +174,11 @@ export class HazardService {
         `Incorrect keyword(s) detected: ${flagged}. These terms were excluded from AI analysis. Please remove non-work-related text from the permit.`
       );
       console.warn(`[HazardService] Incorrect keywords flagged (warn mode): ${flagged}`);
+      throw new InvalidJobContextError(
+        `Invalid job description: incorrect keyword(s) detected: ${incorrectKeywords.map((k) => k.keyword).join(", ")}`,
+        validation,
+        context
+      );
     }
 
     const keywordWarning = !contextValid

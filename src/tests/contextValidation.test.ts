@@ -177,6 +177,26 @@ console.log("\n── ContextValidationService tests ──\n");
   );
 }
 
+// 10. Multiple food/off-topic words are all reported
+{
+  const jobContext = normalizeJobContextInput({
+    workType: "Hot Work",
+    description: ["rice, yam"],
+    jobDescription: "rice, yam",
+  });
+  const r = validateJobContext(jobContext);
+
+  assert(r.contextValid === false, "invalid when description contains rice and yam");
+  assert(
+    r.incorrectKeywords.some((k) => k.keyword === "rice"),
+    "flags rice in description"
+  );
+  assert(
+    r.incorrectKeywords.some((k) => k.keyword === "yam"),
+    "flags yam in description"
+  );
+}
+
 console.log(`\n── Results: ${passed} passed, ${failed} failed ──\n`);
 
 if (failed > 0) {
