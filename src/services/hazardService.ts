@@ -7,6 +7,7 @@ import {
   type IncorrectKeyword,
 } from "./contextValidationService.js";
 import { chatCompletion, embedText } from "./embeddingService.js";
+import { validateJobContextWithGemini } from "./aiContextValidationService.js";
 import { VectorService, type VectorSearchResult } from "./vectorService.js";
 import { env } from "../config.js";
 
@@ -164,7 +165,8 @@ export class HazardService {
   }
 
   async suggestHazards(context: JobContext): Promise<HazardSuggestionResult> {
-    const validation = validateJobContext(context);
+    let validation = validateJobContext(context);
+    validation = await validateJobContextWithGemini(context, validation);
     const { sanitizedContext, incorrectKeywords, contextValid } = validation;
 
     const warnings: string[] = [];

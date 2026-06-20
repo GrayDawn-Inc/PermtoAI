@@ -197,6 +197,17 @@ console.log("\n── ContextValidationService tests ──\n");
   );
 }
 
+// 11. Work-related sentences and comma-separated phrases are allowed locally
+{
+  const r = validateJobContext({
+    jobType: "Hot Work",
+    description: "Area preparation, hazards, cleaning the environment",
+  });
+
+  assert(r.contextValid === true, "allows comma-separated work-related phrases");
+  assert(r.incorrectKeywords.length === 0, "does not reject normal work sentences locally");
+}
+
 console.log(`\n── Results: ${passed} passed, ${failed} failed ──\n`);
 
 if (failed > 0) {

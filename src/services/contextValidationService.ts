@@ -39,8 +39,6 @@ interface LexiconData {
 
 const REASON_BLOCKLIST =
   "Term is not related to permit-to-work, HSE, or oil & gas operations";
-const REASON_UNKNOWN =
-  "Term is not recognized as HSE, permit-to-work, or industry vocabulary";
 
 function tokenize(text: string): string[] {
   return text
@@ -122,14 +120,11 @@ function stripTokens(text: string, tokensToRemove: Set<string>): string {
   return result.replace(/\s{2,}/g, " ").trim();
 }
 
-type ValidationMode = "strict" | "blocklist-only";
-
 function validateField(
   field: string,
   value: string,
   flagged: IncorrectKeyword[],
-  tokensToStrip: Set<string>,
-  mode: ValidationMode
+  tokensToStrip: Set<string>
 ): string {
   const seen = new Set<string>();
 
@@ -148,17 +143,8 @@ function validateField(
       continue;
     }
 
-    // Strict mode applies domain vocabulary only to free-text description fields.
-    // Location names, equipment models, and work types must not be rejected as unknown.
-    if (mode === "strict" && !isAllowedToken(token)) {
-      flagged.push({
-        keyword: token,
-        field,
-        flag: "incorrect_keyword",
-        reason: REASON_UNKNOWN,
-      });
-      tokensToStrip.add(token);
-    }
+    // Unknown terms are left for Gemini's semantic validator; this local pass
+    // only strips known off-topic words.
   }
 
   return stripTokens(value, tokensToStrip);
@@ -178,8 +164,7 @@ export function validateJobContext(context: JobContext): ContextValidationResult
     "jobType",
     context.jobType,
     incorrectKeywords,
-    tokensToStrip,
-    "blocklist-only"
+    tokensToStrip
   );
 
   if (context.location) {
@@ -187,8 +172,7 @@ export function validateJobContext(context: JobContext): ContextValidationResult
       "location",
       context.location,
       incorrectKeywords,
-      tokensToStrip,
-      "blocklist-only"
+      tokensToStrip
     );
   }
 
@@ -197,8 +181,7 @@ export function validateJobContext(context: JobContext): ContextValidationResult
       "environment",
       context.environment,
       incorrectKeywords,
-      tokensToStrip,
-      "blocklist-only"
+      tokensToStrip
     );
   }
 
@@ -207,8 +190,7 @@ export function validateJobContext(context: JobContext): ContextValidationResult
       "description",
       context.description,
       incorrectKeywords,
-      tokensToStrip,
-      "strict"
+      tokensToStrip
     );
   }
 
@@ -218,8 +200,7 @@ export function validateJobContext(context: JobContext): ContextValidationResult
         `equipment[${index}]`,
         item,
         incorrectKeywords,
-        tokensToStrip,
-        "blocklist-only"
+        tokensToStrip
       )
     );
   }
