@@ -628,6 +628,7 @@ Recommends approvers, missing controls, SIMOPS overlaps.
     ],
     "routingPath": ["HSE Manager", "Gas Tester"],
     "missingControls": ["Fire watch not listed"],
+    "isolationIssues": [],
     "routingNotes": "Hot work near live lines requires gas tester sign-off.",
     "riskRating": "HIGH",
     "simopsConflicts": [],

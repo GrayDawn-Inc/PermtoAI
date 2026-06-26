@@ -104,6 +104,68 @@ function stringifyArray(arr: unknown[]): string {
   return arr.map((item) => (typeof item === "string" ? item : JSON.stringify(item))).join(", ");
 }
 
+function summarizeIsolationSections(sections: Array<Record<string, unknown>>): string {
+  if (sections.length === 0) return "None listed";
+
+  return sections
+    .map((section, index) => {
+      const equipment = section.equipmentId ?? section.equipmentName ?? section.equipment ?? "not specified";
+      const isolator = section.isolatorId ?? section.isolatorName ?? "not assigned";
+      const verifier = section.verifierId ?? section.verifierName ?? "not assigned";
+      const restoredBy = section.restoredById ?? section.restoredByName ?? "not assigned";
+      const restorationVerifier = section.verifiedById ?? section.restorationVerifierName ?? "not assigned";
+      const isolatedAt = section.isolatorConfirmedAt ?? "not confirmed";
+      const verifiedAt = section.verifierApprovedAt ?? "not verified";
+
+      return `#${index + 1}: equipment=${equipment}, isolator=${isolator}, verifier=${verifier}, isolatedAt=${isolatedAt}, verifiedAt=${verifiedAt}, restoredBy=${restoredBy}, restorationVerifier=${restorationVerifier}`;
+    })
+    .join("\n");
+}
+
+function validateIsolationSections(
+  sections: Array<Record<string, unknown>>
+): Array<{ field: string; message: string }> {
+  const issues: Array<{ field: string; message: string }> = [];
+
+  sections.forEach((section, index) => {
+    const prefix = `isolationSections.${index}`;
+    const equipment = section.equipmentId ?? section.equipmentName ?? section.equipment;
+    const isolator = section.isolatorId ?? section.isolatorName;
+    const verifier = section.verifierId ?? section.verifierName;
+    const restoredBy = section.restoredById ?? section.restoredByName;
+    const restorationVerifier = section.verifiedById ?? section.restorationVerifierName;
+
+    if (equipment == null || equipment === "") {
+      issues.push({ field: `${prefix}.equipmentId`, message: `Isolation section ${index + 1} must identify the equipment` });
+    }
+    if (isolator == null || isolator === "") {
+      issues.push({ field: `${prefix}.isolatorId`, message: `Isolation section ${index + 1} must assign an isolator` });
+    }
+    if (verifier == null || verifier === "") {
+      issues.push({ field: `${prefix}.verifierId`, message: `Isolation section ${index + 1} must assign an independent verifier` });
+    }
+    if (isolator != null && verifier != null && String(isolator) === String(verifier)) {
+      issues.push({ field: `${prefix}.verifierId`, message: `Isolation section ${index + 1} cannot use the same person as isolator and verifier` });
+    }
+    if (
+      restoredBy != null &&
+      restorationVerifier != null &&
+      String(restoredBy) === String(restorationVerifier)
+    ) {
+      issues.push({ field: `${prefix}.verifiedById`, message: `Isolation section ${index + 1} cannot use the same person to restore and verify restoration` });
+    }
+    if (section.isolatorConfirmedAt && section.verifierApprovedAt) {
+      const isolatedAt = new Date(String(section.isolatorConfirmedAt)).getTime();
+      const verifiedAt = new Date(String(section.verifierApprovedAt)).getTime();
+      if (!Number.isNaN(isolatedAt) && !Number.isNaN(verifiedAt) && isolatedAt > verifiedAt) {
+        issues.push({ field: `${prefix}.verifierApprovedAt`, message: `Isolation section ${index + 1} verifier approval cannot be before isolator confirmation` });
+      }
+    }
+  });
+
+  return issues;
+}
+
 // ─── POST /api/v1/agent/routing/recommend ─────────────────────────────────────
 // Workflow:
 //   1. Compute risk rating from severity × likelihood
@@ -149,6 +211,8 @@ routingRouter.post("/recommend", async (c) => {
   // Step 4: AI — missing controls + routing notes
   const hazardSummary = stringifyArray(permit.hazards ?? []) || "None listed";
   const controlSummary = stringifyArray(permit.controlMeasures ?? []) || "None listed";
+  const isolationSummary = summarizeIsolationSections(permit.isolationSections ?? []);
+  const isolationIssues = validateIsolationSections(permit.isolationSections ?? []);
 
   const aiResult = await chatCompletion([
     {
@@ -169,6 +233,8 @@ Work Area: ${permit.workArea ?? "Not specified"}
 Risk Rating: ${riskRating} (Severity: ${permit.severity ?? "?"}, Likelihood: ${permit.likelihood ?? "?"})
 Work Shift: ${permit.workShift ?? "Not specified"}
 Isolation Sections: ${(permit.isolationSections ?? []).length} section(s)
+Isolation Details:
+${isolationSummary}
 Attachments: ${(permit.attachments ?? []).length} attached
 
 Identified Hazards: ${hazardSummary}
@@ -220,7 +286,11 @@ Identify any missing controls and provide routing notes for the approver.`,
     data: {
       recommendedApprovers,
       routingPath,
-      missingControls: aiOutput.missingControls ?? [],
+      missingControls: [
+        ...(aiOutput.missingControls ?? []),
+        ...isolationIssues.map((issue) => issue.message),
+      ],
+      isolationIssues,
       routingNotes: aiOutput.routingNotes,
       riskRating,
       simopsConflicts,
@@ -282,6 +352,9 @@ routingRouter.post("/pre-submission-check", async (c) => {
     });
     suggestions.push("Add isolation sections with isolator and verifier assignments");
   }
+  if ((permit.isolationSections ?? []).length > 0) {
+    issues.push(...validateIsolationSections(permit.isolationSections ?? []));
+  }
 
   // Attachment check for high-risk permit types
   const isHighRiskType =
@@ -334,6 +407,8 @@ Work Shift: ${permit.workShift ?? "Not specified"}
 Hazards (${(permit.hazards ?? []).length}): ${stringifyArray(permit.hazards ?? []).slice(0, 600)}
 Control Measures (${(permit.controlMeasures ?? []).length}): ${stringifyArray(permit.controlMeasures ?? []).slice(0, 600)}
 Isolation Sections: ${(permit.isolationSections ?? []).length}
+Isolation Details:
+${summarizeIsolationSections(permit.isolationSections ?? [])}
 Attachments: ${(permit.attachments ?? []).length}
 ${riskOptions ? `\nExpected requirements for ${permit.workType}:\n${JSON.stringify(riskOptions).slice(0, 400)}` : ""}
 
