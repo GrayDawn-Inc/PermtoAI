@@ -161,8 +161,11 @@ Input:
       "category": "chemical",
       "likelihood": 3,
       "severity": 2,
-      "recommendedControls": ["H2S monitor", "SCBA"],
-      "dprReference": "DPR EGASPIN Section 4.1.2",
+      "recommendedControls": [
+        { "name": "H2S monitor", "reductionPercent": 20, "approved": true },
+        { "name": "SCBA", "reductionPercent": 25, "approved": true }
+      ],
+      "regulatoryRefs": ["DPR EGASPIN Section 4.1.2"],
       "explanation": "Sour gas environment."
     }
   ]
@@ -180,7 +183,10 @@ Output (JSON string):
     "averageRiskScore": 12.0,
     "dominantRiskLevel": "high",
     "rulesApplied": 1,
-    "overallAdvice": "HOLD — 1 high-severity risk(s) require senior HSE approval...",
+    "residualCounts": { "critical": 0, "high": 0, "medium": 1, "low": 0 },
+    "alarpTargetMaxScore": 9,
+    "intolerableHazards": 0,
+    "overallAdvice": "ALARP — 1 medium residual risk(s) remain within the ALARP range...",
     "confidenceScore": 0.7,
     "confidenceInterval": { "lower": 12.0, "upper": 12.0, "level": "95%" }
   },

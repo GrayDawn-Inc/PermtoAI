@@ -11,6 +11,7 @@ import {
   rejectInvalidJobContext,
   validateJobContextForResponse,
 } from "../contextRequest.js";
+import { formatControls } from "../../utils/controlMeasures.js";
 
 const toolsRouter = new Hono();
 
@@ -65,6 +66,15 @@ toolsRouter.post("/risk-assess", async (c) => {
       averageRiskScore: matrixSummary.averageRiskScore,
       dominantRiskLevel: matrixSummary.dominantRiskLevel,
       rulesApplied: matrixSummary.rulesApplied,
+      residualCounts: matrixSummary.residualCounts,
+      totalResidualMatrixSum: matrixSummary.totalResidualMatrixSum,
+      averageResidualRiskScore: matrixSummary.averageResidualRiskScore,
+      dominantResidualRiskLevel: matrixSummary.dominantResidualRiskLevel,
+      hazardsNeedingAdditionalControls: matrixSummary.hazardsNeedingAdditionalControls,
+      alarpTargetMaxScore: matrixSummary.alarpTargetMaxScore,
+      alarpHazards: matrixSummary.alarpHazards,
+      intolerableHazards: matrixSummary.intolerableHazards,
+      suggestedControlsInsufficient: matrixSummary.suggestedControlsInsufficient,
       overallAdvice: matrixSummary.overallAdvice,
       confidenceScore: matrixSummary.confidenceScore,
       confidenceInterval: matrixSummary.confidenceInterval,
@@ -76,6 +86,17 @@ toolsRouter.post("/risk-assess", async (c) => {
       severity: s.riskScore.severity,
       riskScore: s.riskScore.risk,
       riskLevel: s.riskLevel,
+      residualRiskScore: s.residualRiskScore,
+      residualRiskLevel: s.residualRiskLevel,
+      projectedResidualRiskScore: s.projectedResidualRiskScore,
+      projectedResidualRiskLevel: s.projectedResidualRiskLevel,
+      alarpTargetMaxScore: s.alarpTargetMaxScore,
+      alarpAchieved: s.alarpAchieved,
+      riskAcceptability: s.riskAcceptability,
+      suggestedControlsMeetAlarp: s.suggestedControlsMeetAlarp,
+      requiresAdditionalControls: s.requiresAdditionalControls,
+      additionalReductionNeededPercent: s.additionalReductionNeededPercent,
+      controlEffectiveness: s.controlEffectiveness,
       rationale: s.riskScore.rationale,
       ruleApplied: s.ruleApplied,
       controls: s.hazard.recommendedControls,
@@ -98,7 +119,7 @@ toolsRouter.post("/compliance-check", async (c) => {
   const hazardSummary = hazards
     .map(
       (h) =>
-        `${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}) — Controls: ${h.recommendedControls.join("; ")}${h.regulatoryRefs?.length ? ` — Refs: ${h.regulatoryRefs.join("; ")}` : ""}`
+        `${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}) — Controls: ${formatControls(h.recommendedControls)}${h.regulatoryRefs?.length ? ` — Refs: ${h.regulatoryRefs.join("; ")}` : ""}`
     )
     .join("\n");
 

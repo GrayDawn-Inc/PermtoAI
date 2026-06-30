@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { HazardSchema, JobContextSchema } from "../schemas/index.js";
 import { chatCompletion } from "../services/embeddingService.js";
+import { formatControls } from "../utils/controlMeasures.js";
 
 const ComplianceCheckParams = z.object({
   jobContext: JobContextSchema,
@@ -19,7 +20,7 @@ export const ComplianceCheckTool = {
       const hazardSummary = args.hazards
         .map(
           (h) =>
-            `${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}) — Controls: ${h.recommendedControls.join("; ")}${h.regulatoryRefs?.length ? ` — Refs: ${h.regulatoryRefs.join("; ")}` : ""}`
+            `${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}) — Controls: ${formatControls(h.recommendedControls)}${h.regulatoryRefs?.length ? ` — Refs: ${h.regulatoryRefs.join("; ")}` : ""}`
         )
         .join("\n");
 

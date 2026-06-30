@@ -250,7 +250,10 @@ Scores hazards using likelihood × severity with rule-based severity floors.
       "category": "chemical",
       "likelihood": 3,
       "severity": 2,
-      "recommendedControls": ["Personal H2S monitor", "SCBA on standby"],
+      "recommendedControls": [
+        { "name": "Personal H2S monitor", "reductionPercent": 20, "approved": true },
+        { "name": "SCBA on standby", "reductionPercent": 25, "approved": true }
+      ],
       "regulatoryRefs": ["DPR EGASPIN Section 4.1.2"],
       "explanation": "Sour gas field operations."
     }
@@ -263,7 +266,7 @@ Scores hazards using likelihood × severity with rule-based severity floors.
 ```bash
 curl -s -X POST http://localhost:4000/api/v1/tools/risk-assess \
   -H "Content-Type: application/json" \
-  -d '{"hazards":[{"name":"H2S Exposure","category":"chemical","likelihood":3,"severity":2,"recommendedControls":["H2S monitor"],"explanation":"Sour gas"}]}'
+  -d '{"hazards":[{"name":"H2S Exposure","category":"chemical","likelihood":3,"severity":2,"recommendedControls":[{"name":"H2S monitor","reductionPercent":20,"approved":true},{"name":"SCBA standby","reductionPercent":25,"approved":true}],"explanation":"Sour gas"}]}'
 ```
 
 **Response `200`**
@@ -277,7 +280,16 @@ curl -s -X POST http://localhost:4000/api/v1/tools/risk-assess \
     "averageRiskScore": 12,
     "dominantRiskLevel": "high",
     "rulesApplied": 1,
-    "overallAdvice": "HOLD — 1 high-severity risk(s) require senior HSE approval...",
+    "residualCounts": { "critical": 0, "high": 0, "medium": 1, "low": 0 },
+    "totalResidualMatrixSum": 6.6,
+    "averageResidualRiskScore": 6.6,
+    "dominantResidualRiskLevel": "medium",
+    "hazardsNeedingAdditionalControls": 0,
+    "alarpTargetMaxScore": 9,
+    "alarpHazards": 1,
+    "intolerableHazards": 0,
+    "suggestedControlsInsufficient": 0,
+    "overallAdvice": "ALARP — 1 medium residual risk(s) remain within the ALARP range...",
     "confidenceScore": 0.75,
     "confidenceInterval": { "lower": 12, "upper": 12, "level": "95%" }
   },
@@ -289,13 +301,38 @@ curl -s -X POST http://localhost:4000/api/v1/tools/risk-assess \
       "severity": 4,
       "riskScore": 12,
       "riskLevel": "high",
+      "residualRiskScore": 6.6,
+      "residualRiskLevel": "medium",
+      "projectedResidualRiskScore": 6.6,
+      "projectedResidualRiskLevel": "medium",
+      "alarpTargetMaxScore": 9,
+      "alarpAchieved": true,
+      "riskAcceptability": "alarp",
+      "suggestedControlsMeetAlarp": true,
+      "requiresAdditionalControls": false,
+      "additionalReductionNeededPercent": 0,
+      "controlEffectiveness": {
+        "approvedControlCount": 2,
+        "totalReductionPercent": 45,
+        "effectiveReductionPercent": 45,
+        "suggestedTotalReductionPercent": 45,
+        "suggestedEffectiveReductionPercent": 45,
+        "maxReductionPercent": 80,
+        "capped": false,
+        "suggestedCapped": false
+      },
       "rationale": "Severity adjusted from 2 to 4 by safety rule constraint.",
       "ruleApplied": true,
-      "controls": ["Personal H2S monitor", "SCBA on standby"]
+      "controls": [
+        { "name": "Personal H2S monitor", "reductionPercent": 20, "approved": true },
+        { "name": "SCBA on standby", "reductionPercent": 25, "approved": true }
+      ]
     }
   ]
 }
 ```
+
+Approved controls reduce the inherent score by their `reductionPercent`; total approved reduction is capped at 80%. Residual risk must be `0-9` to be ALARP. Residual risk `10+` is `intolerable`, returns `requiresAdditionalControls: true`, and means work must not proceed. The `projectedResidualRiskScore` shows whether the full suggested control set would reach ALARP if all controls are approved.
 
 **Risk levels:** ≥15 critical · ≥10 high · ≥5 medium · <5 low
 
@@ -892,7 +929,11 @@ Compliance posture report across permits.
   category: "chemical" | "physical" | "biological" | "ergonomic"
   likelihood: 1 | 2 | 3 | 4 | 5
   severity: 1 | 2 | 3 | 4 | 5
-  recommendedControls: string[]
+  recommendedControls: Array<string | {
+    name: string
+    reductionPercent: number
+    approved?: boolean
+  }>
   regulatoryRefs?: string[]       // DPR EGASPIN, ISO 45001, IOGP
   explanation: string
 }

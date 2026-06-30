@@ -11,6 +11,7 @@ import {
   rejectInvalidJobContext,
   validateJobContextForResponse,
 } from "../contextRequest.js";
+import { formatControls } from "../../utils/controlMeasures.js";
 
 const agentRouter = new Hono();
 
@@ -137,7 +138,7 @@ agentRouter.post("/full-assessment", async (c) => {
   const hazardSummary = hazards
     .map(
       (h) =>
-        `${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}) — Controls: ${h.recommendedControls.join("; ")}${h.regulatoryRefs?.length ? ` — Refs: ${h.regulatoryRefs.join("; ")}` : ""}`
+        `${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}) — Controls: ${formatControls(h.recommendedControls)}${h.regulatoryRefs?.length ? ` — Refs: ${h.regulatoryRefs.join("; ")}` : ""}`
     )
     .join("\n");
 
@@ -169,8 +170,15 @@ ${hazardSummary}`,
   ).every((s) => s.compliant);
 
   const allValidationPassed = validationResults.every((r) => r.passed);
+  const allRisksAlarp = matrixSummary.intolerableHazards === 0;
+  const finalRecommendation =
+    allValidationPassed && overallCompliant && allRisksAlarp
+      ? "Recommend Approval"
+      : !allRisksAlarp
+        ? "Do Not Permit Work - Intolerable Risk"
+        : "Flag for Review";
 
-  console.log(`[API] Full assessment complete — recommendation: ${allValidationPassed && overallCompliant ? "Approve" : "Flag for Review"}`);
+  console.log(`[API] Full assessment complete — recommendation: ${finalRecommendation}`);
 
   return c.json({
     success: true,
@@ -178,10 +186,7 @@ ${hazardSummary}`,
     contextValid: hazardResult.contextValid,
     incorrectKeywords: hazardResult.incorrectKeywords,
     warnings: hazardResult.warnings,
-    recommendation:
-      allValidationPassed && overallCompliant
-        ? "Recommend Approval"
-        : "Flag for Review",
+    recommendation: finalRecommendation,
     steps: {
       hazardSuggest: {
         contextValid: hazardResult.contextValid,
@@ -204,6 +209,15 @@ ${hazardSummary}`,
           averageRiskScore: matrixSummary.averageRiskScore,
           dominantRiskLevel: matrixSummary.dominantRiskLevel,
           rulesApplied: matrixSummary.rulesApplied,
+          residualCounts: matrixSummary.residualCounts,
+          totalResidualMatrixSum: matrixSummary.totalResidualMatrixSum,
+          averageResidualRiskScore: matrixSummary.averageResidualRiskScore,
+          dominantResidualRiskLevel: matrixSummary.dominantResidualRiskLevel,
+          hazardsNeedingAdditionalControls: matrixSummary.hazardsNeedingAdditionalControls,
+          alarpTargetMaxScore: matrixSummary.alarpTargetMaxScore,
+          alarpHazards: matrixSummary.alarpHazards,
+          intolerableHazards: matrixSummary.intolerableHazards,
+          suggestedControlsInsufficient: matrixSummary.suggestedControlsInsufficient,
           overallAdvice: matrixSummary.overallAdvice,
           confidenceScore: matrixSummary.confidenceScore,
           confidenceInterval: matrixSummary.confidenceInterval,
@@ -215,6 +229,17 @@ ${hazardSummary}`,
           severity: s.riskScore.severity,
           riskScore: s.riskScore.risk,
           riskLevel: s.riskLevel,
+          residualRiskScore: s.residualRiskScore,
+          residualRiskLevel: s.residualRiskLevel,
+          projectedResidualRiskScore: s.projectedResidualRiskScore,
+          projectedResidualRiskLevel: s.projectedResidualRiskLevel,
+          alarpTargetMaxScore: s.alarpTargetMaxScore,
+          alarpAchieved: s.alarpAchieved,
+          riskAcceptability: s.riskAcceptability,
+          suggestedControlsMeetAlarp: s.suggestedControlsMeetAlarp,
+          requiresAdditionalControls: s.requiresAdditionalControls,
+          additionalReductionNeededPercent: s.additionalReductionNeededPercent,
+          controlEffectiveness: s.controlEffectiveness,
           ruleApplied: s.ruleApplied,
           controls: s.hazard.recommendedControls,
         })),
@@ -269,7 +294,7 @@ agentRouter.post("/quick-assess", async (c) => {
   const matrixSummary = riskService.computeSummary(scoredHazards);
 
   const requiresFullAssessment =
-    matrixSummary.counts.critical > 0 || matrixSummary.counts.high > 0;
+    matrixSummary.residualCounts.critical > 0 || matrixSummary.residualCounts.high > 0;
 
   return c.json({
     success: true,
@@ -288,6 +313,15 @@ agentRouter.post("/quick-assess", async (c) => {
       averageRiskScore: matrixSummary.averageRiskScore,
       dominantRiskLevel: matrixSummary.dominantRiskLevel,
       rulesApplied: matrixSummary.rulesApplied,
+      residualCounts: matrixSummary.residualCounts,
+      totalResidualMatrixSum: matrixSummary.totalResidualMatrixSum,
+      averageResidualRiskScore: matrixSummary.averageResidualRiskScore,
+      dominantResidualRiskLevel: matrixSummary.dominantResidualRiskLevel,
+      hazardsNeedingAdditionalControls: matrixSummary.hazardsNeedingAdditionalControls,
+      alarpTargetMaxScore: matrixSummary.alarpTargetMaxScore,
+      alarpHazards: matrixSummary.alarpHazards,
+      intolerableHazards: matrixSummary.intolerableHazards,
+      suggestedControlsInsufficient: matrixSummary.suggestedControlsInsufficient,
       overallAdvice: matrixSummary.overallAdvice,
       confidenceScore: matrixSummary.confidenceScore,
       confidenceInterval: matrixSummary.confidenceInterval,
@@ -300,6 +334,17 @@ agentRouter.post("/quick-assess", async (c) => {
       severity: s.riskScore.severity,
       riskScore: s.riskScore.risk,
       riskLevel: s.riskLevel,
+      residualRiskScore: s.residualRiskScore,
+      residualRiskLevel: s.residualRiskLevel,
+      projectedResidualRiskScore: s.projectedResidualRiskScore,
+      projectedResidualRiskLevel: s.projectedResidualRiskLevel,
+      alarpTargetMaxScore: s.alarpTargetMaxScore,
+      alarpAchieved: s.alarpAchieved,
+      riskAcceptability: s.riskAcceptability,
+      suggestedControlsMeetAlarp: s.suggestedControlsMeetAlarp,
+      requiresAdditionalControls: s.requiresAdditionalControls,
+      additionalReductionNeededPercent: s.additionalReductionNeededPercent,
+      controlEffectiveness: s.controlEffectiveness,
       ruleApplied: s.ruleApplied,
       controls: s.hazard.recommendedControls,
     })),
@@ -407,12 +452,18 @@ agentRouter.post("/simops-assess", async (c) => {
   // ── Step 3: Score all hazards ─────────────────────────────────────────────
   console.log("[API] Step 3/4 — Scoring hazards...");
   const scoredHazards = riskService.scoreHazards(allHazards);
+  const matrixSummary = riskService.computeSummary(scoredHazards);
 
   const riskSummary = {
     critical: scoredHazards.filter((s) => s.riskLevel === "critical").length,
     high: scoredHazards.filter((s) => s.riskLevel === "high").length,
     medium: scoredHazards.filter((s) => s.riskLevel === "medium").length,
     low: scoredHazards.filter((s) => s.riskLevel === "low").length,
+    residual: matrixSummary.residualCounts,
+    hazardsNeedingAdditionalControls: matrixSummary.hazardsNeedingAdditionalControls,
+    alarpTargetMaxScore: matrixSummary.alarpTargetMaxScore,
+    intolerableHazards: matrixSummary.intolerableHazards,
+    suggestedControlsInsufficient: matrixSummary.suggestedControlsInsufficient,
   };
 
   // ── Step 4: AI SIMOPS safety briefing ────────────────────────────────────
@@ -445,7 +496,7 @@ agentRouter.post("/simops-assess", async (c) => {
     .slice(0, 15) // cap prompt length
     .map(
       (s) =>
-        `  ${s.hazard.name} [${s.riskLevel.toUpperCase()} risk ${s.riskScore.risk}] — ${s.hazard.recommendedControls.slice(0, 2).join("; ")}`
+        `  ${s.hazard.name} [${s.riskLevel.toUpperCase()} inherent ${s.riskScore.risk}; ${s.residualRiskLevel.toUpperCase()} residual ${s.residualRiskScore}; projected ${s.projectedResidualRiskScore}; ${s.riskAcceptability.toUpperCase()}] — ${formatControls(s.hazard.recommendedControls.slice(0, 2))}`
     )
     .join("\n");
 

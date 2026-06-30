@@ -12,6 +12,7 @@ import { ValidationService } from "./services/validationService.js";
 import { HazardService } from "./services/hazardService.js";
 import { chatCompletion } from "./services/embeddingService.js";
 import type { Hazard, JobContext } from "./schemas/index.js";
+import { formatControls } from "./utils/controlMeasures.js";
 
 // ─── Sample Data ───
 
@@ -31,9 +32,9 @@ const sampleHazards: Hazard[] = [
     likelihood: 4,
     severity: 3, // intentionally low — rule should bump to 4
     recommendedControls: [
-      "Continuous gas monitoring",
-      "Escape breathing apparatus",
-      "Wind direction monitoring",
+      { name: "Continuous gas monitoring", reductionPercent: 20, approved: true },
+      { name: "Escape breathing apparatus", reductionPercent: 25, approved: true },
+      { name: "Wind direction monitoring", reductionPercent: 10, approved: false },
     ],
     regulatoryRefs: ["DPR EGASPIN Section 5.2.3", "ISO 45001:2018 Clause 8.1.3"],
     explanation: "Sour gas field environment presents high H₂S risk requiring constant monitoring",
@@ -44,9 +45,9 @@ const sampleHazards: Hazard[] = [
     likelihood: 3,
     severity: 2, // intentionally low — rule should bump to 4
     recommendedControls: [
-      "Full body harness with double lanyard",
-      "Scaffolding with guardrails",
-      "Rescue plan in place",
+      { name: "Full body harness with double lanyard", reductionPercent: 20, approved: true },
+      { name: "Scaffolding with guardrails", reductionPercent: 25, approved: true },
+      { name: "Rescue plan in place", reductionPercent: 15, approved: false },
     ],
     regulatoryRefs: ["DPR EGASPIN Section 4.1.7", "IOGP Report 459 Section 3.2"],
     explanation: "10-meter elevated work area requires fall protection measures",
@@ -57,9 +58,9 @@ const sampleHazards: Hazard[] = [
     likelihood: 3,
     severity: 4,
     recommendedControls: [
-      "Hot work permit with gas-free certificate",
-      "Fire watch during and 30 min after work",
-      "Fire blankets and extinguishers on site",
+      { name: "Hot work permit with gas-free certificate", reductionPercent: 25, approved: true },
+      { name: "Fire watch during and 30 min after work", reductionPercent: 20, approved: true },
+      { name: "Fire blankets and extinguishers on site", reductionPercent: 10, approved: false },
     ],
     regulatoryRefs: ["DPR EGASPIN Section 3.4.2", "ISO 45001:2018 Clause 8.1.4"],
     explanation: "Welding near hydrocarbon processing unit creates fire/explosion risk",
@@ -105,6 +106,7 @@ function testRiskScoring() {
     console.log(
       `\n  ${s.hazard.name}${ruleTag}` +
       `\n    L:${s.riskScore.likelihood} × S:${s.riskScore.severity} = ${s.riskScore.risk} (${s.riskLevel.toUpperCase()})` +
+      `\n    Residual: ${s.residualRiskScore} (${s.residualRiskLevel.toUpperCase()}) after ${s.controlEffectiveness.effectiveReductionPercent}% approved reduction` +
       `\n    Rationale: ${s.riskScore.rationale}`
     );
   }
@@ -213,7 +215,7 @@ async function testHazardSuggest() {
   for (const h of result.hazards) {
     console.log(
       `\n  • ${h.name} [${h.category}] L:${h.likelihood}/S:${h.severity}` +
-      `\n    Controls: ${h.recommendedControls.join("; ")}` +
+      `\n    Controls: ${formatControls(h.recommendedControls)}` +
       (h.regulatoryRefs?.length ? `\n    Refs: ${h.regulatoryRefs.join("; ")}` : "")
     );
   }
@@ -229,7 +231,7 @@ async function testComplianceCheck() {
   const hazardSummary = sampleHazards
     .map(
       (h) =>
-        `${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}) — Controls: ${h.recommendedControls.join("; ")}${h.regulatoryRefs?.length ? ` — Refs: ${h.regulatoryRefs.join("; ")}` : ""}`
+        `${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}) — Controls: ${formatControls(h.recommendedControls)}${h.regulatoryRefs?.length ? ` — Refs: ${h.regulatoryRefs.join("; ")}` : ""}`
     )
     .join("\n");
 

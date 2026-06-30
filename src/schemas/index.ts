@@ -12,13 +12,36 @@ export type HazardCategory = z.infer<typeof HazardCategorySchema>;
 // ─── Likelihood / Severity (1-5 scale) ───
 export const RatingSchema = z.number().int().min(1).max(5);
 
+// ─── Control Measures ───
+export const ControlMeasureSchema = z.object({
+  name: z.string().describe("Specific control measure"),
+  reductionPercent: z
+    .number()
+    .min(0)
+    .max(100)
+    .describe("Estimated risk reduction if this control is verified/approved"),
+  approved: z
+    .boolean()
+    .optional()
+    .describe("Whether the control has been checked and approved by the reviewer"),
+});
+export type ControlMeasure = z.infer<typeof ControlMeasureSchema>;
+
+export const RecommendedControlSchema = z.union([
+  z.string(),
+  ControlMeasureSchema,
+]);
+export type RecommendedControl = z.infer<typeof RecommendedControlSchema>;
+
 // ─── Hazard ───
 export const HazardSchema = z.object({
   name: z.string().describe("Clear hazard description"),
   category: HazardCategorySchema,
   likelihood: RatingSchema.describe("1=rare, 5=almost certain"),
   severity: RatingSchema.describe("1=negligible, 5=catastrophic"),
-  recommendedControls: z.array(z.string()).describe("Specific control measures"),
+  recommendedControls: z
+    .array(RecommendedControlSchema)
+    .describe("Specific control measures with optional risk-reduction percentages"),
   regulatoryRefs: z.array(z.string()).describe("Applicable regulatory references — DPR EGASPIN, ISO 45001, IOGP, etc.").optional(),
   explanation: z.string().describe("Rationale for why this hazard is relevant"),
 });

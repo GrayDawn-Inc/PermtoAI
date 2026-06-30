@@ -167,10 +167,18 @@ Scores hazards using the risk matrix (`likelihood × severity`). Applies rule-ba
       "likelihood": 3,
       "severity": 2,
       "recommendedControls": [
-        "Personal H2S monitor worn at all times",
-        "SCBA available on standby"
+        {
+          "name": "Personal H2S monitor worn at all times",
+          "reductionPercent": 20,
+          "approved": true
+        },
+        {
+          "name": "SCBA available on standby",
+          "reductionPercent": 25,
+          "approved": true
+        }
       ],
-      "dprReference": "DPR EGASPIN Section 4.1.2",
+      "regulatoryRefs": ["DPR EGASPIN Section 4.1.2"],
       "explanation": "Sour gas field operations carry inherent H2S risk."
     }
   ]
@@ -193,7 +201,21 @@ Scores hazards using the risk matrix (`likelihood × severity`). Applies rule-ba
     "averageRiskScore": 13.0,
     "dominantRiskLevel": "critical",
     "rulesApplied": 1,
-    "overallAdvice": "STOP WORK — 1 critical risk(s) identified. Immediate escalation required. Do not proceed until critical hazards are eliminated or risk reduced below critical threshold.",
+    "residualCounts": {
+      "critical": 0,
+      "high": 1,
+      "medium": 3,
+      "low": 0
+    },
+    "totalResidualMatrixSum": 29.8,
+    "averageResidualRiskScore": 7.45,
+    "dominantResidualRiskLevel": "high",
+    "hazardsNeedingAdditionalControls": 1,
+    "alarpTargetMaxScore": 9,
+    "alarpHazards": 3,
+    "intolerableHazards": 1,
+    "suggestedControlsInsufficient": 0,
+    "overallAdvice": "NO WORK — 1 intolerable residual risk(s) exceed the ALARP target (score 0-9). Work must not proceed until approved controls reduce every hazard to ALARP.",
     "confidenceScore": 0.75,
     "confidenceInterval": {
       "lower": 7.8,
@@ -209,9 +231,40 @@ Scores hazards using the risk matrix (`likelihood × severity`). Applies rule-ba
       "severity": 4,
       "riskScore": 12,
       "riskLevel": "high",
+      "residualRiskScore": 6.6,
+      "residualRiskLevel": "medium",
+      "projectedResidualRiskScore": 6.6,
+      "projectedResidualRiskLevel": "medium",
+      "alarpTargetMaxScore": 9,
+      "alarpAchieved": true,
+      "riskAcceptability": "alarp",
+      "suggestedControlsMeetAlarp": true,
+      "requiresAdditionalControls": false,
+      "additionalReductionNeededPercent": 0,
+      "controlEffectiveness": {
+        "approvedControlCount": 2,
+        "totalReductionPercent": 45,
+        "effectiveReductionPercent": 45,
+        "suggestedTotalReductionPercent": 45,
+        "suggestedEffectiveReductionPercent": 45,
+        "maxReductionPercent": 80,
+        "capped": false,
+        "suggestedCapped": false
+      },
       "rationale": "Sour gas field operations carry inherent H2S risk. Severity adjusted from 2 to 4 by safety rule constraint. Reference: DPR EGASPIN Section 4.1.2.",
       "ruleApplied": true,
-      "controls": ["Personal H2S monitor worn at all times", "SCBA available on standby"]
+      "controls": [
+        {
+          "name": "Personal H2S monitor worn at all times",
+          "reductionPercent": 20,
+          "approved": true
+        },
+        {
+          "name": "SCBA available on standby",
+          "reductionPercent": 25,
+          "approved": true
+        }
+      ]
     }
   ]
 }
@@ -226,9 +279,19 @@ Scores hazards using the risk matrix (`likelihood × severity`). Applies rule-ba
 | `summary.averageRiskScore` | Mean risk score across all hazards |
 | `summary.dominantRiskLevel` | Highest risk level present |
 | `summary.rulesApplied` | Number of hazards whose severity was raised by a safety rule |
-| `summary.overallAdvice` | Tiered advice: `STOP WORK` / `HOLD` / `CAUTION` / `PROCEED` |
+| `summary.residualCounts` | Hazard count per residual risk level after approved controls |
+| `summary.averageResidualRiskScore` | Mean risk score after approved controls |
+| `summary.dominantResidualRiskLevel` | Highest residual risk level present after approved controls |
+| `summary.hazardsNeedingAdditionalControls` | Hazards still above ALARP after approved controls |
+| `summary.alarpTargetMaxScore` | Maximum residual score allowed by ALARP (`9`) |
+| `summary.alarpHazards` | Hazards with residual score in the ALARP range (`0-9`) |
+| `summary.intolerableHazards` | Hazards with residual score `10+`; work must not proceed |
+| `summary.suggestedControlsInsufficient` | Suggested control sets that still cannot reach ALARP even if all controls are approved |
+| `summary.overallAdvice` | ALARP-based advice: `NO WORK` when residual risk is `10+`, otherwise ALARP guidance |
 | `summary.confidenceScore` | 0.0–1.0. Boosted by rule coverage, DPR references, and hazard breadth |
 | `summary.confidenceInterval` | 95% CI around `averageRiskScore` using `mean ± 1.96 × (σ/√n)` |
+
+Approved controls reduce the inherent score by their `reductionPercent`; total approved reduction is capped at 80%. Residual risk must be `0-9` to be ALARP. If residual risk is `10+`, the hazard returns `riskAcceptability: "intolerable"` and `requiresAdditionalControls: true`. The `projectedResidualRiskScore` shows whether the full suggested control set would reach ALARP if all controls are approved.
 
 **Risk level thresholds:**
 
@@ -323,7 +386,7 @@ Runs four sequential validation layers on a permit. Layers 2 and 3 run in parall
 ```json
 {
   "success": true,
-  "recommendation": "Flag for Review",
+  "recommendation": "Do Not Permit Work - Intolerable Risk",
   "allPassed": false,
   "totalIssues": 2,
   "layers": [
@@ -493,7 +556,12 @@ Complete four-step permit pipeline in a single request.
         "averageRiskScore": 12.25,
         "dominantRiskLevel": "critical",
         "rulesApplied": 3,
-        "overallAdvice": "STOP WORK — 2 critical risk(s) identified. Immediate escalation required.",
+        "residualCounts": { "critical": 0, "high": 2, "medium": 5, "low": 1 },
+        "alarpTargetMaxScore": 9,
+        "alarpHazards": 6,
+        "intolerableHazards": 2,
+        "suggestedControlsInsufficient": 0,
+        "overallAdvice": "NO WORK — 2 intolerable residual risk(s) exceed the ALARP target (score 0-9). Work must not proceed until approved controls reduce every hazard to ALARP.",
         "confidenceScore": 0.85,
         "confidenceInterval": { "lower": 8.4, "upper": 16.1, "level": "95%" }
       },
@@ -542,7 +610,12 @@ Two-step pipeline for rapid initial screening.
     "averageRiskScore": 10.33,
     "dominantRiskLevel": "critical",
     "rulesApplied": 2,
-    "overallAdvice": "STOP WORK — 1 critical risk(s) identified. Immediate escalation required.",
+    "residualCounts": { "critical": 0, "high": 1, "medium": 4, "low": 1 },
+    "alarpTargetMaxScore": 9,
+    "alarpHazards": 5,
+    "intolerableHazards": 1,
+    "suggestedControlsInsufficient": 0,
+    "overallAdvice": "NO WORK — 1 intolerable residual risk(s) exceed the ALARP target (score 0-9). Work must not proceed until approved controls reduce every hazard to ALARP.",
     "confidenceScore": 0.8,
     "confidenceInterval": { "lower": 6.1, "upper": 14.6, "level": "95%" }
   },
@@ -771,7 +844,11 @@ Stand-alone SIMOPS conflict check (no hazard suggestion or AI briefing).
   category: "chemical" | "physical" | "biological" | "ergonomic"
   likelihood: 1 | 2 | 3 | 4 | 5    // 1 = rare, 5 = almost certain
   severity: 1 | 2 | 3 | 4 | 5      // 1 = negligible, 5 = catastrophic
-  recommendedControls: string[]
+  recommendedControls: Array<string | {
+    name: string
+    reductionPercent: number
+    approved?: boolean
+  }>
   dprReference?: string              // e.g. "DPR EGASPIN Section 5.2.3"
   explanation: string
 }

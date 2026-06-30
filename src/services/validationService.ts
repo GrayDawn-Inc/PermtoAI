@@ -1,6 +1,7 @@
 import type { Hazard, JobContext, ValidationResult } from "../schemas/index.js";
 import { chatCompletion } from "./embeddingService.js";
 import { classifyRisk } from "./riskScoringService.js";
+import { formatControls, controlName } from "../utils/controlMeasures.js";
 
 /**
  * Multi-layer validation system as defined in requirements:
@@ -109,7 +110,7 @@ export class ValidationService {
       const hazardSummary = hazards
         .map(
           (h) =>
-            `- ${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}): ${h.recommendedControls.join(", ")}`
+            `- ${h.name} (${h.category}, L:${h.likelihood}/S:${h.severity}): ${formatControls(h.recommendedControls)}`
         )
         .join("\n");
 
@@ -245,7 +246,7 @@ Note: Only raise issues based on the hazard data provided. Do not flag absence o
 
     // Check for identical controls across different hazards
     const controlSets = hazards.map((h) =>
-      h.recommendedControls.sort().join("|")
+      h.recommendedControls.map(controlName).sort().join("|")
     );
     const uniqueControlSets = new Set(controlSets);
     if (uniqueControlSets.size === 1 && hazards.length > 2) {

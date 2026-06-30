@@ -183,13 +183,13 @@ PermitoAI exposes six AI tools, available via both **REST API** and **MCP**:
 Identifies 5–10 workplace hazards for a job context using AI + vector retrieval of regulations and historical incidents.
 
 **Input:** `JobContext` (job type, location, environment, equipment, contractor, description)
-**Output:** Array of hazards with categories, likelihood/severity, controls, DPR references
+**Output:** Array of hazards with categories, likelihood/severity, controls with reduction percentages, DPR references
 
 ### RISK_ASSESS
 Scores hazards using the risk matrix (likelihood × severity) with rule-based severity floor constraints. Returns an aggregate `summary` with confidence scoring.
 
 **Input:** `Hazard[]`
-**Output:** Scored hazards with risk levels, plus `summary` containing `totalMatrixSum`, `averageRiskScore`, `dominantRiskLevel`, `overallAdvice`, `confidenceScore` (0–1), and a `confidenceInterval` (95%)
+**Output:** Scored hazards with inherent, residual, projected residual, and ALARP/intolerable status, plus `summary` containing `totalMatrixSum`, `averageRiskScore`, `dominantRiskLevel`, residual risk counts/averages, `overallAdvice`, `confidenceScore` (0–1), and a `confidenceInterval` (95%). Residual risk must be `0-9` to be ALARP; `10+` is intolerable and work must not proceed.
 
 **Enforced severity minimums:**
 
@@ -256,7 +256,7 @@ Takes a single `JobContext` and returns all step results plus an overall recomme
 ### `quick-assess`
 Fast pipeline: **HAZARD_SUGGEST → RISK_ASSESS** only.
 
-Returns `requiresFullAssessment: true` if critical or high risks are detected. `riskSummary` now includes full confidence fields.
+Returns `requiresFullAssessment: true` if residual risks remain above ALARP after approved controls. `riskSummary` now includes full confidence, ALARP, and residual-risk fields.
 
 ### `simops-assess`
 Full SIMOPS pipeline: **SIMOPS_CHECK → HAZARD_SUGGEST (parallel for each conflicting type) → RISK_ASSESS → AI safety briefing**.

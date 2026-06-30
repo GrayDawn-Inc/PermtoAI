@@ -10,7 +10,7 @@
     "api": "tsx src/api/server.ts",
     "seed": "tsx src/seed.ts",
     "ingest": "tsx src/ingest.ts",
-    "test": "tsx src/tests/contextValidation.test.ts",
+    "test": "tsx src/tests/contextValidation.test.ts && tsx src/tests/riskScoring.test.ts",
     "test:validation": "tsx src/tests/contextValidation.test.ts"
   },
   "keywords": [],

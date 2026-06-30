@@ -1,4 +1,5 @@
 import type { Hazard, RiskScore } from "../schemas/index.js";
+import { normalizeControls, type NormalizedControl } from "../utils/controlMeasures.js";
 
 /**
  * Rule-based minimum severity constraints for critical hazards.
@@ -25,6 +26,9 @@ const CRITICAL_HAZARD_RULES: Record<string, { minSeverity: number }> = {
  * Risk level classification based on risk score (likelihood × severity).
  */
 export type RiskLevel = "low" | "medium" | "high" | "critical";
+export type RiskAcceptability = "alarp" | "intolerable";
+
+export const ALARP_MAX_RISK_SCORE = 9;
 
 export function classifyRisk(riskScore: number): RiskLevel {
   if (riskScore >= 15) return "critical";
@@ -37,7 +41,33 @@ export interface ScoredHazard {
   hazard: Hazard;
   riskScore: RiskScore;
   riskLevel: RiskLevel;
+  controlEffectiveness: ControlEffectiveness;
+  residualRiskScore: number;
+  residualRiskLevel: RiskLevel;
+  projectedResidualRiskScore: number;
+  projectedResidualRiskLevel: RiskLevel;
+  alarpTargetMaxScore: number;
+  alarpAchieved: boolean;
+  riskAcceptability: RiskAcceptability;
+  suggestedControlsMeetAlarp: boolean;
+  requiresAdditionalControls: boolean;
+  additionalReductionNeededPercent: number;
   ruleApplied: boolean;
+}
+
+export interface ControlEffectiveness {
+  suggestedControls: NormalizedControl[];
+  approvedControls: NormalizedControl[];
+  pendingControls: NormalizedControl[];
+  suggestedControlCount: number;
+  approvedControlCount: number;
+  totalReductionPercent: number;
+  effectiveReductionPercent: number;
+  suggestedTotalReductionPercent: number;
+  suggestedEffectiveReductionPercent: number;
+  maxReductionPercent: number;
+  capped: boolean;
+  suggestedCapped: boolean;
 }
 
 export interface RiskMatrixSummary {
@@ -51,6 +81,24 @@ export interface RiskMatrixSummary {
   dominantRiskLevel: RiskLevel;
   /** How many hazards had their severity raised by a safety rule */
   rulesApplied: number;
+  /** Count per residual risk level after approved controls are applied */
+  residualCounts: { critical: number; high: number; medium: number; low: number };
+  /** Sum of residual risk scores after approved controls */
+  totalResidualMatrixSum: number;
+  /** Mean residual score after approved controls */
+  averageResidualRiskScore: number;
+  /** Highest residual risk level present */
+  dominantResidualRiskLevel: RiskLevel;
+  /** Number of hazards still high or critical after approved controls */
+  hazardsNeedingAdditionalControls: number;
+  /** Maximum residual risk score allowed by the ALARP target */
+  alarpTargetMaxScore: number;
+  /** Hazards at or below ALARP after approved controls */
+  alarpHazards: number;
+  /** Hazards above ALARP after approved controls */
+  intolerableHazards: number;
+  /** Suggested control sets that are still not enough to reach ALARP if all are approved */
+  suggestedControlsInsufficient: number;
   /** Actionable overall advice based on risk distribution */
   overallAdvice: string;
   /**
@@ -67,6 +115,7 @@ export interface RiskMatrixSummary {
 }
 
 export class RiskScoringService {
+  private readonly maxControlReductionPercent = 80;
   /**
    * Score a list of hazards, applying rule-based severity constraints.
    */
@@ -92,6 +141,24 @@ export class RiskScoringService {
 
     const risk = hazard.likelihood * severity;
     const riskLevel = classifyRisk(risk);
+    const controlEffectiveness = this.computeControlEffectiveness(hazard);
+    const residualRiskScore = this.computeResidualRiskScore(
+      risk,
+      controlEffectiveness.effectiveReductionPercent
+    );
+    const residualRiskLevel = classifyRisk(residualRiskScore);
+    const projectedResidualRiskScore = this.computeResidualRiskScore(
+      risk,
+      controlEffectiveness.suggestedEffectiveReductionPercent
+    );
+    const projectedResidualRiskLevel = classifyRisk(projectedResidualRiskScore);
+    const alarpAchieved = residualRiskScore <= ALARP_MAX_RISK_SCORE;
+    const suggestedControlsMeetAlarp = projectedResidualRiskScore <= ALARP_MAX_RISK_SCORE;
+    const additionalReductionNeededPercent = this.computeAdditionalReductionNeededPercent(
+      risk,
+      controlEffectiveness.effectiveReductionPercent
+    );
+    const requiresAdditionalControls = !alarpAchieved;
 
     const rationale = this.buildRationale(hazard, severity, ruleApplied);
 
@@ -105,6 +172,17 @@ export class RiskScoringService {
         historicalEvidence: hazard.regulatoryRefs?.length ? hazard.regulatoryRefs : undefined,
       },
       riskLevel,
+      controlEffectiveness,
+      residualRiskScore,
+      residualRiskLevel,
+      projectedResidualRiskScore,
+      projectedResidualRiskLevel,
+      alarpTargetMaxScore: ALARP_MAX_RISK_SCORE,
+      alarpAchieved,
+      riskAcceptability: alarpAchieved ? "alarp" : "intolerable",
+      suggestedControlsMeetAlarp,
+      requiresAdditionalControls,
+      additionalReductionNeededPercent,
       ruleApplied,
     };
   }
@@ -121,6 +199,15 @@ export class RiskScoringService {
         averageRiskScore: 0,
         dominantRiskLevel: "low",
         rulesApplied: 0,
+        residualCounts: { critical: 0, high: 0, medium: 0, low: 0 },
+        totalResidualMatrixSum: 0,
+        averageResidualRiskScore: 0,
+        dominantResidualRiskLevel: "low",
+        hazardsNeedingAdditionalControls: 0,
+        alarpTargetMaxScore: ALARP_MAX_RISK_SCORE,
+        alarpHazards: 0,
+        intolerableHazards: 0,
+        suggestedControlsInsufficient: 0,
         overallAdvice: "No hazards assessed.",
         confidenceScore: 0,
         confidenceInterval: { lower: 0, upper: 0, level: "95%" },
@@ -149,6 +236,33 @@ export class RiskScoringService {
             : "low";
 
     const rulesApplied = scored.filter((s) => s.ruleApplied).length;
+    const residualScores = scored.map((s) => s.residualRiskScore);
+    const totalResidualMatrixSum = parseFloat(
+      residualScores.reduce((a, b) => a + b, 0).toFixed(2)
+    );
+    const averageResidualRiskScore = parseFloat((totalResidualMatrixSum / n).toFixed(2));
+    const residualCounts = {
+      critical: scored.filter((s) => s.residualRiskLevel === "critical").length,
+      high: scored.filter((s) => s.residualRiskLevel === "high").length,
+      medium: scored.filter((s) => s.residualRiskLevel === "medium").length,
+      low: scored.filter((s) => s.residualRiskLevel === "low").length,
+    };
+    const dominantResidualRiskLevel: RiskLevel =
+      residualCounts.critical > 0
+        ? "critical"
+        : residualCounts.high > 0
+          ? "high"
+          : residualCounts.medium > 0
+            ? "medium"
+            : "low";
+    const hazardsNeedingAdditionalControls = scored.filter(
+      (s) => s.requiresAdditionalControls
+    ).length;
+    const alarpHazards = scored.filter((s) => s.alarpAchieved).length;
+    const intolerableHazards = scored.filter((s) => !s.alarpAchieved).length;
+    const suggestedControlsInsufficient = scored.filter(
+      (s) => !s.suggestedControlsMeetAlarp
+    ).length;
 
     // ── Confidence score ────────────────────────────────────────────────────
     // Base: AI hazard suggestions have inherent uncertainty
@@ -189,21 +303,18 @@ export class RiskScoringService {
 
     // ── Overall advice ──────────────────────────────────────────────────────
     let overallAdvice: string;
-    if (counts.critical > 0) {
+    if (intolerableHazards > 0) {
       overallAdvice =
-        `STOP WORK — ${counts.critical} critical risk(s) identified. Immediate escalation required. ` +
-        `Do not proceed until critical hazards are eliminated or risk reduced below critical threshold.`;
-    } else if (counts.high > 0) {
+        `NO WORK — ${intolerableHazards} intolerable residual risk(s) exceed the ALARP target ` +
+        `(score 0-${ALARP_MAX_RISK_SCORE}). Work must not proceed until approved controls reduce every ` +
+        `hazard to ALARP.`;
+    } else if (residualCounts.medium > 0) {
       overallAdvice =
-        `HOLD — ${counts.high} high-severity risk(s) require senior HSE approval and verified additional ` +
-        `controls before work can proceed. Review all high-risk hazard controls.`;
-    } else if (counts.medium > 0) {
-      overallAdvice =
-        `CAUTION — ${counts.medium} medium-risk hazard(s) present. Verify all stated controls are ` +
-        `implemented and signed off before starting work. Continue monitoring during execution.`;
+        `ALARP — ${residualCounts.medium} medium residual risk(s) remain within the ALARP range ` +
+        `(score 0-${ALARP_MAX_RISK_SCORE}). Verify approved controls are implemented and signed off before work starts.`;
     } else {
       overallAdvice =
-        `PROCEED — Low overall risk profile (avg score ${averageRiskScore.toFixed(1)}/25). ` +
+        `ALARP — Low residual risk profile (avg score ${averageResidualRiskScore.toFixed(1)}/25). ` +
         `Standard permit-to-work controls are sufficient. Maintain routine monitoring.`;
     }
 
@@ -213,10 +324,75 @@ export class RiskScoringService {
       averageRiskScore,
       dominantRiskLevel,
       rulesApplied,
+      residualCounts,
+      totalResidualMatrixSum,
+      averageResidualRiskScore,
+      dominantResidualRiskLevel,
+      hazardsNeedingAdditionalControls,
+      alarpTargetMaxScore: ALARP_MAX_RISK_SCORE,
+      alarpHazards,
+      intolerableHazards,
+      suggestedControlsInsufficient,
       overallAdvice,
       confidenceScore,
       confidenceInterval,
     };
+  }
+
+  private computeControlEffectiveness(hazard: Hazard): ControlEffectiveness {
+    const controls = normalizeControls(hazard.recommendedControls);
+    const approvedControls = controls.filter((control) => control.approved);
+    const pendingControls = controls.filter((control) => !control.approved);
+    const totalReductionPercent = parseFloat(
+      approvedControls
+        .reduce((sum, control) => sum + control.reductionPercent, 0)
+        .toFixed(2)
+    );
+    const effectiveReductionPercent = Math.min(
+      totalReductionPercent,
+      this.maxControlReductionPercent
+    );
+    const suggestedTotalReductionPercent = parseFloat(
+      controls
+        .reduce((sum, control) => sum + control.reductionPercent, 0)
+        .toFixed(2)
+    );
+    const suggestedEffectiveReductionPercent = Math.min(
+      suggestedTotalReductionPercent,
+      this.maxControlReductionPercent
+    );
+
+    return {
+      suggestedControls: controls,
+      approvedControls,
+      pendingControls,
+      suggestedControlCount: controls.length,
+      approvedControlCount: approvedControls.length,
+      totalReductionPercent,
+      effectiveReductionPercent,
+      suggestedTotalReductionPercent,
+      suggestedEffectiveReductionPercent,
+      maxReductionPercent: this.maxControlReductionPercent,
+      capped: totalReductionPercent > this.maxControlReductionPercent,
+      suggestedCapped: suggestedTotalReductionPercent > this.maxControlReductionPercent,
+    };
+  }
+
+  private computeResidualRiskScore(risk: number, effectiveReductionPercent: number): number {
+    const multiplier = 1 - effectiveReductionPercent / 100;
+    return parseFloat(Math.max(1, risk * multiplier).toFixed(2));
+  }
+
+  private computeAdditionalReductionNeededPercent(
+    risk: number,
+    effectiveReductionPercent: number
+  ): number {
+    if (risk <= ALARP_MAX_RISK_SCORE) return 0;
+
+    const requiredReductionPercent = (1 - ALARP_MAX_RISK_SCORE / risk) * 100;
+    return parseFloat(
+      Math.max(0, requiredReductionPercent - effectiveReductionPercent).toFixed(2)
+    );
   }
 
   private buildRationale(

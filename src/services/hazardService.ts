@@ -56,7 +56,10 @@ Generate 5-${env.MAX_HAZARD_SUGGESTIONS} potential hazards for this job. For eac
 2. category: One of [chemical, physical, biological, ergonomic]
 3. likelihood: Rating 1-5 (1=rare, 5=almost certain)
 4. severity: Rating 1-5 (1=negligible, 5=catastrophic)
-5. recommendedControls: Array of specific control measures
+5. recommendedControls: Array of control objects. Each object must include:
+   - name: Specific control measure
+   - reductionPercent: Estimated risk reduction from 5-35 if this control is verified/approved
+   - approved: false
 6. regulatoryRefs: Array of applicable regulatory references. Include any that apply:
    - DPR EGASPIN (e.g. "DPR EGASPIN Section 4.1.2")
    - ISO 45001 (e.g. "ISO 45001:2018 Clause 8.1.3")
@@ -68,6 +71,11 @@ CONSTRAINTS:
 - Only suggest hazards directly relevant to the stated job type and work activity
 - Do NOT invent hazards related to irrelevant or non-industrial topics
 - Prefer controls from RELEVANT REGULATIONS when available
+- Use higher reduction percentages for engineering/isolation controls than PPE/admin controls
+- Do not mark any suggested control as approved; approval happens later during review
+- Generate enough control measures so that, if all suggested controls are approved, the projected residual risk score is within ALARP (0-9)
+- If a hazard starts high or critical, include stronger engineering/isolation controls before administrative controls or PPE
+- Do not rely on PPE alone to bring high/critical hazards into ALARP
 
 CRITICAL FOCUS AREAS:
 - H₂S exposure in sour gas fields

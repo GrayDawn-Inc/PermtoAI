@@ -143,6 +143,11 @@ RiskScoringService.scoreHazards(hazards[])
         │     ≥  5 → medium
         │      < 5 → low
         │
+        ├─ residualRiskScore = risk × (1 - approvedControlReduction%)
+        ├─ projectedResidualRiskScore = risk × (1 - allSuggestedControlReduction%)
+        ├─ alarpAchieved = residualRiskScore ≤ 9
+        ├─ riskAcceptability = "alarp" | "intolerable"
+        │
         └─ rationale = explanation + rule adjustment note + DPR reference
 
 RiskScoringService.computeSummary(scoredHazards[])
@@ -152,12 +157,14 @@ RiskScoringService.computeSummary(scoredHazards[])
         ├─ averageRiskScore totalMatrixSum / n
         ├─ dominantRiskLevel  highest level present
         ├─ rulesApplied     count of hazards with ruleApplied = true
+        ├─ residualCounts   after approved controls
+        ├─ alarpTargetMaxScore = 9
+        ├─ intolerableHazards count with residual score ≥ 10
+        ├─ suggestedControlsInsufficient count whose full suggested controls still exceed ALARP
         │
-        ├─ overallAdvice    tiered string:
-        │     critical → "STOP WORK — ..."
-        │     high     → "HOLD — ..."
-        │     medium   → "CAUTION — ..."
-        │     low      → "PROCEED — ..."
+        ├─ overallAdvice:
+        │     residual ≥ 10 → "NO WORK — ..." until controls reduce every hazard to ALARP
+        │     residual 0-9 → "ALARP — ..."
         │
         ├─ confidenceScore (0.0–0.95)
         │     base 0.55
